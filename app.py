@@ -726,8 +726,10 @@ def show_standings_board(
     mode: str,
     viewer: tuple[str, str] | None = None,
     title: str = "랭킹",
+    scope: str = "cumul",
 ) -> None:
-    rows = standings.board(kind=kind, mode=mode, limit=10, viewer=viewer)
+    scope = "single" if scope == "single" else "cumul"
+    rows = standings.board(kind=kind, mode=mode, limit=10, viewer=viewer, scope=scope)
     if not rows:
         st.caption("이 종목·방식으로 끝난 판이 아직 없습니다. 한 판이 끝나면 여기에 쌓입니다.")
         return
@@ -740,19 +742,32 @@ def show_standings_board(
             out.append("<div class='rank-gap'>···</div>")
         cls = "rank-row me" if r.get("self") else "rank-row"
         pos = f"pos p{rank}" if rank <= 3 else "pos"
+        if scope == "single":
+            streak = int(r.get("best_streak") or 0)
+            streak_bit = f" · 최고 {streak}연속" if streak >= 2 else ""
+            meta = f"<span class='meta-bit'> · 한 판 최고{streak_bit}</span>"
+            val = f"{int(r.get('points') or 0)}점<small>맞힘 {int(r.get('score') or 0)}개</small>"
+        else:
+            meta = (
+                f"<span class='meta-bit'> · {int(r.get('games') or 0)}판"
+                f" · 1등 {int(r.get('wins') or 0)}회</span>"
+            )
+            val = f"{int(r.get('points') or 0)}점<small>{int(r.get('score') or 0)}개</small>"
         out.append(
             f"<div class='{cls}'><span class='{pos}'>{rank}</span>"
             f"<span class='who'><b>{html.escape(r.get('name') or '')}</b>"
-            f"<small>{_org_rank_spans(r.get('org') or '')}"
-            f"<span class='meta-bit'> · {int(r.get('games') or 0)}판 · 1등 {int(r.get('wins') or 0)}회</span></small></span>"
+            f"<small>{_org_rank_spans(r.get('org') or '')}{meta}</small></span>"
             f"<span class='rbar'><i style='width:{max(2, min(100, int(100 * int(r.get('points') or 0) / top)))}%'></i></span>"
-            f"<span class='val'>{int(r.get('points') or 0)}점<small>{int(r.get('score') or 0)}개</small></span></div>"
+            f"<span class='val'>{val}</span></div>"
         )
         prev = rank
     if title:
-        note = "10위까지 공개합니다."
+        if scope == "single":
+            note = "한 판에서 낸 최고 점수 기준입니다. 10위까지 공개합니다."
+        else:
+            note = "여러 판을 합친 누적 점수 기준입니다. 10위까지 공개합니다."
         if viewer and any(int(r.get("rank") or 0) > 10 for r in rows):
-            note = "10위까지 공개하고, 지금 푼 사람의 자리만 아래에 붙입니다. 다시 들어오면 10위만 보입니다."
+            note = note.replace("10위까지 공개합니다.", "10위까지 공개하고, 지금 푼 사람의 자리만 아래에 붙입니다.")
         _sect(title, note)
     st.markdown("<div class='rank'>" + "".join(out) + "</div>", unsafe_allow_html=True)
 
@@ -1095,8 +1110,16 @@ def hub_screen() -> None:
                 st.session_state.phase = "laws"
                 st.rerun()
     st.caption("최신판례·법률개정은 법제처 원문 그대로 공식 자료만 제공")
-    _sect("랭킹", "종목과 방식을 나눠 봅니다. 10위까지 공개합니다.")
-    rk1, rk2 = st.columns(2)
+    _sect("랭킹", "누적과 단일(한 판 최고)을 나눠 봅니다. 종목·방식별로 10위까지 공개합니다.")
+    rk0, rk1, rk2 = st.columns(3)
+    with rk0:
+        rank_scope = st.radio(
+            "구분",
+            ["cumul", "single"],
+            format_func=lambda x: "누적" if x == "cumul" else "단일 최고",
+            horizontal=True,
+            key="rank_scope",
+        )
     with rk1:
         rank_kind = st.radio(
             "종목",
@@ -1113,7 +1136,7 @@ def hub_screen() -> None:
             horizontal=True,
             key="rank_mode",
         )
-    show_standings_board(rank_kind, rank_mode, title="")
+    show_standings_board(rank_kind, rank_mode, title="", scope=rank_scope)
     recent = standings.recent(6, kind=rank_kind, mode=rank_mode)
     if recent:
         st.caption(
@@ -1657,6 +1680,9 @@ def _react_answer(code: str, pid: str) -> None:
 
 def _show_fx() -> None:
     fx = st.session_state.pop("_pending_fx", None)
+    pending = st.session_state.pop("_pending_sfx", None)
+    if pending:
+        sfx.play(pending[0], pending[1])
     if not fx:
         return
     ok = bool(fx.get("ok"))
@@ -1711,12 +1737,11 @@ def done_screen(room: dict, pid: str, deck: list[dict], total: int) -> None:
         show_ranking(live, pid, "최종 순위" if all_done else "실시간 순위")
         if all_done:
             me_live = (live.get("players") or {}).get(pid) or {}
-            show_standings_board(
-                live.get("kind") or "exam",
-                rooms.mode_of(live),
-                viewer=((me_live.get("name") or ""), path_text(rooms.player_org(live, pid, me_live))),
-                title="랭킹",
-            )
+            viewer = ((me_live.get("name") or ""), path_text(rooms.player_org(live, pid, me_live)))
+            kind = live.get("kind") or "exam"
+            mode = rooms.mode_of(live)
+            show_standings_board(kind, mode, viewer=viewer, title="누적 랭킹", scope="cumul")
+            show_standings_board(kind, mode, viewer=viewer, title="단일 최고 랭킹", scope="single")
         if not all_done:
             st.caption("아직 푸는 사람이 있습니다.")
 
@@ -1925,9 +1950,6 @@ def play_screen() -> None:
     mode = rooms.mode_of(room)
     lim = rooms.limit_sec(room)
     rnd = int(room.get("round") or 1)
-    pending = st.session_state.pop("_pending_sfx", None)
-    if pending:
-        sfx.play(pending[0], pending[1])
     _show_fx()
 
     head = [

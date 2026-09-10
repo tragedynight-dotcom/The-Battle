@@ -203,25 +203,45 @@ def record(room: dict) -> None:
             p["wins"] = int(p.get("wins") or 0) + 1
         add_score = int(row.get("score") or 0)
         add_pts = int(row.get("points") or 0)
+        add_best = int(row.get("best") or 0)
         p["score"] = int(p.get("score") or 0) + add_score
         p["points"] = int(p.get("points") or 0) + add_pts
+        p["best_score"] = max(int(p.get("best_score") or 0), add_score)
+        p["best_points"] = max(int(p.get("best_points") or 0), add_pts)
+        p["best_streak"] = max(int(p.get("best_streak") or 0), add_best)
         p["last"] = when
         by = p.setdefault("by", {})
         b = by.setdefault(
             _bucket(room.get("kind") or "exam", room.get("mode") or "classic"),
-            {"games": 0, "wins": 0, "score": 0, "points": 0},
+            {"games": 0, "wins": 0, "score": 0, "points": 0, "best_score": 0, "best_points": 0, "best_streak": 0},
         )
         b["games"] = int(b.get("games") or 0) + 1
         if i == 1:
             b["wins"] = int(b.get("wins") or 0) + 1
         b["score"] = int(b.get("score") or 0) + add_score
         b["points"] = int(b.get("points") or 0) + add_pts
+        b["best_score"] = max(int(b.get("best_score") or 0), add_score)
+        b["best_points"] = max(int(b.get("best_points") or 0), add_pts)
+        b["best_streak"] = max(int(b.get("best_streak") or 0), add_best)
     _save(data)
 
 
-def _row_from_bucket(p: dict, bucket: dict | None) -> dict:
+def _legacy_best(p: dict, bucket: dict | None = None) -> tuple[int, int, int]:
+    """예전 기록에 단일 최고가 없으면 1판짜리만 누적으로 보정한다."""
+    src = bucket if bucket is not None else p
+    bs = int(src.get("best_score") or 0)
+    bp = int(src.get("best_points") or 0)
+    bk = int(src.get("best_streak") or 0)
+    games = int(src.get("games") or 0)
+    if bp <= 0 and games == 1:
+        bp = int(src.get("points") or 0)
+        bs = int(src.get("score") or 0)
+    return bs, bp, bk
+
+
+def _row_from_bucket(p: dict, bucket: dict | None, scope: str = "cumul") -> dict:
     b = bucket or {}
-    return {
+    base = {
         "name": p.get("name") or "",
         "org": p.get("org") or "",
         "games": int(b.get("games") or 0),
@@ -229,26 +249,58 @@ def _row_from_bucket(p: dict, bucket: dict | None) -> dict:
         "score": int(b.get("score") or 0),
         "points": int(b.get("points") or 0),
     }
+    bs, bp, bk = _legacy_best(p, b)
+    base["best_score"] = bs
+    base["best_points"] = bp
+    base["best_streak"] = bk
+    if scope == "single":
+        base["score"] = bs
+        base["points"] = bp
+    return base
 
 
-def people(limit: int = 12, kind: str | None = None, mode: str | None = None) -> list[dict]:
+def people(
+    limit: int = 12,
+    kind: str | None = None,
+    mode: str | None = None,
+    scope: str = "cumul",
+) -> list[dict]:
+    scope = "single" if scope == "single" else "cumul"
     rows: list[dict] = []
     for p in (_load().get("people") or {}).values():
         if kind or mode:
-            row = _row_from_bucket(p, (p.get("by") or {}).get(_bucket(kind or "exam", mode or "classic")))
+            row = _row_from_bucket(p, (p.get("by") or {}).get(_bucket(kind or "exam", mode or "classic")), scope)
             if row["games"] <= 0:
                 continue
+            if scope == "single" and int(row.get("points") or 0) <= 0 and int(row.get("score") or 0) <= 0:
+                continue
         else:
+            bs, bp, bk = _legacy_best(p)
             row = {
                 "name": p.get("name") or "",
                 "org": p.get("org") or "",
                 "games": int(p.get("games") or 0),
                 "wins": int(p.get("wins") or 0),
-                "score": int(p.get("score") or 0),
-                "points": int(p.get("points") or 0),
+                "score": bs if scope == "single" else int(p.get("score") or 0),
+                "points": bp if scope == "single" else int(p.get("points") or 0),
+                "best_score": bs,
+                "best_points": bp,
+                "best_streak": bk,
             }
+            if scope == "single" and int(row.get("points") or 0) <= 0 and int(row.get("score") or 0) <= 0:
+                continue
         rows.append(row)
-    rows.sort(key=lambda r: (-int(r.get("points") or 0), -int(r.get("wins") or 0), r.get("name") or ""))
+    if scope == "single":
+        rows.sort(
+            key=lambda r: (
+                -int(r.get("points") or 0),
+                -int(r.get("score") or 0),
+                -int(r.get("best_streak") or 0),
+                r.get("name") or "",
+            )
+        )
+    else:
+        rows.sort(key=lambda r: (-int(r.get("points") or 0), -int(r.get("wins") or 0), r.get("name") or ""))
     if limit > 0:
         return rows[:limit]
     return rows
@@ -259,15 +311,16 @@ def board(
     mode: str | None = None,
     limit: int = 10,
     viewer: tuple[str, str] | None = None,
+    scope: str = "cumul",
 ) -> list[dict]:
     """공개는 limit위까지. viewer가 그 밖이면 그 한 줄만 뒤에 붙인다."""
-    rows = people(0, kind=kind, mode=mode)
+    rows = people(0, kind=kind, mode=mode, scope=scope)
     out: list[dict] = []
     mine: dict | None = None
     want_name = (viewer[0] if viewer else "") or ""
     want_org = (viewer[1] if viewer else "") or ""
     for i, r in enumerate(rows, 1):
-        item = {**r, "rank": i, "self": False}
+        item = {**r, "rank": i, "self": False, "scope": scope}
         if want_name and r.get("name") == want_name and (r.get("org") or "") == want_org:
             item["self"] = True
             mine = item

@@ -109,7 +109,8 @@ def _clip(kind: str) -> bytes:
     if kind == "combo8":
         return _chime([(392, 45), (523, 50), (659, 55), (784, 60), (988, 70), (1319, 230)], 0.39)
     if kind == "miss":
-        return _tone([(196, 130), (147, 170)], 0.20)
+        # 저음은 폰 스피커에서 거의 안 들림 → 중고음·볼륨 보강
+        return _tone([(420, 140), (280, 200)], 0.36)
     if kind == "go":
         return _tone([(523, 100), (784, 180)])
     if kind == "done":
@@ -124,8 +125,31 @@ def play(kind: str, token: str) -> None:
         return
     st.session_state._sfx_token = token
     b64 = base64.b64encode(_clip(kind)).decode("ascii")
+    # autoplay 속성만 쓰면 모바일에서 막히는 경우가 많아 play()를 직접 호출한다.
     components.html(
-        f'<audio autoplay src="data:audio/wav;base64,{b64}"></audio>',
+        f"""
+<audio id="tb-sfx" src="data:audio/wav;base64,{b64}" preload="auto"></audio>
+<script>
+(function () {{
+  var a = document.getElementById("tb-sfx");
+  if (!a) return;
+  function go() {{
+    try {{
+      a.currentTime = 0;
+      var p = a.play();
+      if (p && p.catch) p.catch(function () {{}});
+    }} catch (e) {{}}
+  }}
+  if (a.readyState >= 2) go();
+  else {{
+    a.addEventListener("canplaythrough", go, {{ once: true }});
+    a.addEventListener("loadeddata", go, {{ once: true }});
+  }}
+  setTimeout(go, 30);
+  setTimeout(go, 120);
+}})();
+</script>
+""",
         height=0,
     )
 
