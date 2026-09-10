@@ -493,65 +493,94 @@ st.markdown(
 GATE_PASSWORD = "12345678"
 RANK_RESET_PASSWORDS = frozenset({"rlawhdtjs1^", "whdtjs12^"})
 GATE_STORE = "thebattle_gate_v1"
+GATE_TTL_SEC = 12 * 60 * 60  # 활동 기준 12시간 (새로고침 유지, 영구 출입 방지)
 
 
 def _drop_room() -> None:
-    """방 번호만 지운다. 출입 상태(세션)는 남긴다."""
+    """방 번호만 지운다. 출입 상태는 남긴다."""
     st.query_params.clear()
+    if st.session_state.get("unlocked"):
+        _mark_gate()
 
 
 def _clear_param(name: str) -> None:
-    if name in st.query_params:
-        try:
-            del st.query_params[name]
-        except Exception:
-            vals = {k: st.query_params.get(k) for k in list(st.query_params.keys()) if k != name}
-            st.query_params.clear()
-            for k, v in vals.items():
-                if v is not None:
-                    st.query_params[k] = v
+    if name not in st.query_params:
+        return
+    try:
+        del st.query_params[name]
+    except Exception:
+        vals = {k: st.query_params.get(k) for k in list(st.query_params.keys()) if k != name}
+        st.query_params.clear()
+        for k, v in vals.items():
+            if v is not None:
+                st.query_params[k] = v
 
 
-def _persist_gate() -> None:
-    """탭을 닫기 전까지는 새로고침해도 출입 유지(sessionStorage). URL에 영구 저장하지 않음."""
+def _cookie_gate_on() -> bool:
+    try:
+        return str(st.context.cookies.get(GATE_STORE) or "") == "1"
+    except Exception:
+        return False
+
+
+def _gate_js(script: str) -> None:
     import streamlit.components.v1 as components
 
-    components.html(
+    components.html(f"<script>(function(){{\n{script}\n}})();</script>", height=0)
+
+
+def _mark_gate() -> None:
+    """URL에 만료시각을 남겨 새로고침 후에도 출입이 유지되게 한다."""
+    st.query_params["in"] = str(int(time.time()) + GATE_TTL_SEC)
+    _gate_js(
         f"""
-        <script>
-        (function () {{
-          try {{ sessionStorage.setItem("{GATE_STORE}", "1"); }} catch (e) {{}}
-        }})();
-        </script>
-        """,
-        height=0,
+        var KEY = "{GATE_STORE}";
+        var w = window.parent;
+        try {{ w.sessionStorage.setItem(KEY, "1"); }} catch (e) {{}}
+        try {{
+          var secure = (w.location.protocol === "https:") ? "; Secure" : "";
+          w.document.cookie = KEY + "=1; path=/; max-age={GATE_TTL_SEC}; SameSite=Lax" + secure;
+        }} catch (e) {{}}
+        """
     )
+
+
+def _gate_valid() -> bool:
+    raw = str(st.query_params.get("in") or "").strip()
+    if not raw:
+        return False
+    # 예전 영구 플래그(?in=1)는 더 이상 통과시키지 않는다.
+    if raw == "1":
+        _clear_param("in")
+        return False
+    try:
+        return int(raw) >= int(time.time())
+    except ValueError:
+        _clear_param("in")
+        return False
 
 
 def _bridge_gate_from_storage() -> None:
-    """sessionStorage에 출입이 있으면 한 번만 ?g=1 로 알려 파이썬 세션을 복구한다."""
-    import streamlit.components.v1 as components
-
-    components.html(
+    """쿠키/sessionStorage만 있고 URL 출입이 없을 때 복구한다."""
+    _gate_js(
         f"""
-        <script>
-        (function () {{
+        var KEY = "{GATE_STORE}";
+        var w = window.parent;
+        var url = new URL(w.location.href);
+        var ok = false;
+        try {{ ok = w.sessionStorage.getItem(KEY) === "1"; }} catch (e) {{}}
+        if (!ok) {{
           try {{
-            if (sessionStorage.getItem("{GATE_STORE}") !== "1") return;
-            var url = new URL(window.parent.location.href);
-            if (url.searchParams.get("g") === "1") return;
-            url.searchParams.set("g", "1");
-            window.parent.location.replace(url.toString());
+            ok = ("; " + w.document.cookie).indexOf("; " + KEY + "=1") !== -1;
           }} catch (e) {{}}
-        }})();
-        </script>
-        """,
-        height=0,
+        }}
+        if (!ok) return;
+        if (url.searchParams.get("g") === "1") return;
+        url.searchParams.set("g", "1");
+        w.location.replace(url.toString());
+        """
     )
 
-
-# 예전 ?in=1 영구 출입은 더 이상 인정하지 않는다.
-_clear_param("in")
 
 if "pid" not in st.session_state:
     st.session_state.pid = uuid.uuid4().hex[:10]
@@ -560,11 +589,9 @@ if "phase" not in st.session_state:
 if "unlocked" not in st.session_state:
     st.session_state.unlocked = False
 
-# 새로고침 복구용 일회성 플래그
-if st.query_params.get("g") == "1":
+if _gate_valid() or _cookie_gate_on() or st.query_params.get("g") == "1":
     st.session_state.unlocked = True
     _clear_param("g")
-    _persist_gate()
 
 
 def _mast(sub: str, title: str = APP_TITLE, tags: list[str] | None = None) -> None:
@@ -662,7 +689,7 @@ def gate_screen() -> None:
         if (pw or "").strip() == GATE_PASSWORD:
             st.session_state.unlocked = True
             st.session_state.phase = "hub"
-            _persist_gate()
+            _mark_gate()
             st.rerun()
         else:
             st.error("비밀번호가 맞지 않습니다.")
@@ -674,7 +701,8 @@ if not st.session_state.unlocked:
     gate_screen()
     st.stop()
 
-_persist_gate()
+# 쓰는 동안 만료를 밀어 새로고침·연속 사용 시 끊기지 않게 한다.
+_mark_gate()
 
 if st.session_state.phase == "hub" and st.query_params.get("room"):
     st.session_state.phase = "enter"
