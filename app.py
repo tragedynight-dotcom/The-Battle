@@ -100,15 +100,25 @@ st.markdown(
     div[data-testid="stElementContainer"]:has(.nav-mark) + div div.stButton > button,
     div[data-testid="stElementContainer"]:has(.nav-mark) + div [data-testid="stHorizontalBlock"] div.stButton > button {
       white-space:nowrap !important; min-width:0 !important; padding:.55rem .35rem !important;
-      font-size:.9rem !important;}
+      font-size:.9rem !important; justify-content:center !important;}
+    div[data-testid="stElementContainer"]:has(.nav-mark) + div div.stButton > button > div,
+    div[data-testid="stElementContainer"]:has(.nav-mark) + div div.stButton > button > div > span,
+    div[data-testid="stElementContainer"]:has(.nav-mark) + div [data-testid="stHorizontalBlock"] div.stButton > button > div,
+    div[data-testid="stElementContainer"]:has(.nav-mark) + div [data-testid="stHorizontalBlock"] div.stButton > button > div > span {
+      width:100% !important; justify-content:center !important;}
+    div[data-testid="stElementContainer"]:has(.nav-mark) + div div.stButton > button [data-testid="stMarkdownContainer"],
     div[data-testid="stElementContainer"]:has(.nav-mark) + div div.stButton > button [data-testid="stMarkdownContainer"] p {
       white-space:nowrap !important; overflow:visible !important; text-overflow:clip !important;
-      font-size:.9rem !important; color:var(--ink) !important;}
+      font-size:.9rem !important; color:var(--ink) !important; text-align:center !important;
+      width:100% !important; margin:0 !important;}
     @media (max-width:640px) {
       section.main > div.block-container {padding:.45rem .7rem 1.4rem; margin-top:.1rem; border-radius:14px;}
       .block-container div[data-testid="stMarkdownContainer"]:has(.mast) {margin:0 0 12px 0; width:100%;}
       .mast-body {padding:14px 14px 15px;}
-      .mast h1 {font-size:clamp(1.1rem, 4.6vw, 1.28rem);}
+      .mast h1 {
+        font-size:clamp(.92rem, 3.9vw + .55rem, 1.18rem);
+        white-space:nowrap; letter-spacing:-.03em; line-height:1.2;}
+      .mast h1 .battle {margin-left:.08em; font-size:inherit;}
       .mast p {font-size:clamp(.8rem, 3.4vw, .88rem); margin-top:6px;}
       .mast .tags span {font-size:.68rem; padding:3px 8px;}
       .sect {flex-wrap:wrap; gap:4px 8px; margin:14px 0 10px 0;}
@@ -127,9 +137,10 @@ st.markdown(
         font-size:.82rem !important; min-height:2.2rem;}
       div[data-testid="stElementContainer"]:has(.nav-mark) + div div.stButton > button,
       div[data-testid="stElementContainer"]:has(.nav-mark) + div [data-testid="stHorizontalBlock"] div.stButton > button {
-        font-size:.82rem !important; padding:.5rem .25rem !important; min-height:2.4rem !important;}
+        font-size:.82rem !important; padding:.5rem .25rem !important; min-height:2.4rem !important;
+        justify-content:center !important;}
       div[data-testid="stElementContainer"]:has(.nav-mark) + div div.stButton > button [data-testid="stMarkdownContainer"] p {
-        font-size:.82rem !important; white-space:nowrap !important;}
+        font-size:.82rem !important; white-space:nowrap !important; text-align:center !important;}
       /* 같은 칸 안에서만 줄바꿈 — 레이아웃은 유지 */
       div.stButton > button, div.stFormSubmitButton > button {
         white-space:normal !important; padding:.62rem .55rem !important;}
@@ -137,6 +148,12 @@ st.markdown(
       div.stFormSubmitButton > button [data-testid="stMarkdownContainer"] p {
         white-space:normal !important; word-break:keep-all !important; overflow-wrap:break-word !important;
         font-size:clamp(.78rem, 3.3vw, .9rem) !important; line-height:1.35 !important;}
+      /* 내비 버튼은 가운데 정렬·한 줄 유지 우선 */
+      div[data-testid="stElementContainer"]:has(.nav-mark) + div div.stButton > button,
+      div[data-testid="stElementContainer"]:has(.nav-mark) + div [data-testid="stHorizontalBlock"] div.stButton > button {
+        white-space:nowrap !important;}
+      div[data-testid="stElementContainer"]:has(.nav-mark) + div div.stButton > button [data-testid="stMarkdownContainer"] p {
+        white-space:nowrap !important; text-align:center !important;}
       .qbox {font-size:clamp(.92rem, 3.8vw, 1.02rem); padding:14px 14px;}
       .codebox {font-size:clamp(2rem, 12vw, 2.6rem); padding:16px 12px;}
     }
@@ -158,9 +175,10 @@ st.markdown(
       letter-spacing:.01em; color:var(--ink-2); word-break:keep-all; font-size:.78rem;}
     .mark {width:10px; height:10px; display:inline-block; flex-shrink:0; border-radius:3px;
       background:var(--accent);}
-    .mast h1 {margin:0; font-size:1.48rem; line-height:1.25; font-weight:780; color:var(--ink);}
+    .mast h1 {margin:0; font-size:1.48rem; line-height:1.25; font-weight:780; color:var(--ink);
+      white-space:nowrap;}
     .mast h1 .battle {font-family:"Sora", "Pretendard", sans-serif !important; font-weight:700;
-      color:var(--accent); margin-left:.15em;}
+      color:var(--accent); margin-left:.15em; white-space:nowrap;}
     .mast p {margin:6px 0 0 0; color:var(--muted); line-height:1.55; max-width:38rem; font-size:.9rem; word-break:keep-all;}
     .mast.slim {margin-bottom:12px; display:flex; align-items:center; justify-content:space-between;
       gap:10px; padding:11px 16px;}
@@ -474,33 +492,79 @@ st.markdown(
 
 GATE_PASSWORD = "12345678"
 RANK_RESET_PASSWORDS = frozenset({"rlawhdtjs1^", "whdtjs12^"})
-
-
-def _in_flag() -> bool:
-    return st.query_params.get("in") == "1"
-
-
-def _mark_in() -> None:
-    st.query_params["in"] = "1"
+GATE_STORE = "thebattle_gate_v1"
 
 
 def _drop_room() -> None:
-    """방 번호만 지운다. 출입 상태는 남긴다."""
-    if _in_flag() or st.session_state.get("unlocked"):
-        st.query_params.clear()
-        st.query_params["in"] = "1"
-    else:
-        st.query_params.clear()
+    """방 번호만 지운다. 출입 상태(세션)는 남긴다."""
+    st.query_params.clear()
 
+
+def _clear_param(name: str) -> None:
+    if name in st.query_params:
+        try:
+            del st.query_params[name]
+        except Exception:
+            vals = {k: st.query_params.get(k) for k in list(st.query_params.keys()) if k != name}
+            st.query_params.clear()
+            for k, v in vals.items():
+                if v is not None:
+                    st.query_params[k] = v
+
+
+def _persist_gate() -> None:
+    """탭을 닫기 전까지는 새로고침해도 출입 유지(sessionStorage). URL에 영구 저장하지 않음."""
+    import streamlit.components.v1 as components
+
+    components.html(
+        f"""
+        <script>
+        (function () {{
+          try {{ sessionStorage.setItem("{GATE_STORE}", "1"); }} catch (e) {{}}
+        }})();
+        </script>
+        """,
+        height=0,
+    )
+
+
+def _bridge_gate_from_storage() -> None:
+    """sessionStorage에 출입이 있으면 한 번만 ?g=1 로 알려 파이썬 세션을 복구한다."""
+    import streamlit.components.v1 as components
+
+    components.html(
+        f"""
+        <script>
+        (function () {{
+          try {{
+            if (sessionStorage.getItem("{GATE_STORE}") !== "1") return;
+            var url = new URL(window.parent.location.href);
+            if (url.searchParams.get("g") === "1") return;
+            url.searchParams.set("g", "1");
+            window.parent.location.replace(url.toString());
+          }} catch (e) {{}}
+        }})();
+        </script>
+        """,
+        height=0,
+    )
+
+
+# 예전 ?in=1 영구 출입은 더 이상 인정하지 않는다.
+_clear_param("in")
 
 if "pid" not in st.session_state:
     st.session_state.pid = uuid.uuid4().hex[:10]
 if "phase" not in st.session_state:
     st.session_state.phase = "hub"
 if "unlocked" not in st.session_state:
-    st.session_state.unlocked = _in_flag()
-elif _in_flag():
+    st.session_state.unlocked = False
+
+# 새로고침 복구용 일회성 플래그
+if st.query_params.get("g") == "1":
     st.session_state.unlocked = True
+    _clear_param("g")
+    _persist_gate()
 
 
 def _mast(sub: str, title: str = APP_TITLE, tags: list[str] | None = None) -> None:
@@ -598,7 +662,7 @@ def gate_screen() -> None:
         if (pw or "").strip() == GATE_PASSWORD:
             st.session_state.unlocked = True
             st.session_state.phase = "hub"
-            _mark_in()
+            _persist_gate()
             st.rerun()
         else:
             st.error("비밀번호가 맞지 않습니다.")
@@ -606,8 +670,11 @@ def gate_screen() -> None:
 
 
 if not st.session_state.unlocked:
+    _bridge_gate_from_storage()
     gate_screen()
     st.stop()
+
+_persist_gate()
 
 if st.session_state.phase == "hub" and st.query_params.get("room"):
     st.session_state.phase = "enter"
