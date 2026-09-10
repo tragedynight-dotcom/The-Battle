@@ -9,7 +9,7 @@ from datetime import datetime
 import streamlit as st
 
 from src.exam import RAND_EXAM, RAND_TOPIC, area_choices, circle, item_at, make_ox_quiz, make_quiz
-from src.org import TEAMS, agencies, agency_label, path_text, station_label, stations, units
+from src.org import TEAMS, agencies, agency_label, org_key, path_text, station_label, stations, units
 from src import rooms
 from src import sfx
 from src import precedent
@@ -47,53 +47,50 @@ st.markdown(
       background:rgba(255,255,255,.78); border-radius:18px; max-width:980px;
       padding:.55rem 1.05rem 1.8rem; margin-top:.2rem;
       box-shadow:0 8px 24px rgba(28,36,48,.05); border:1px solid rgba(28,36,48,.05);
-      backdrop-filter:blur(6px);}
+      backdrop-filter:blur(6px);
+      height:auto !important; min-height:0 !important; overflow:visible !important;}
     section.main {padding-top:0 !important;}
     .stMainBlockContainer, div[data-testid="stMainBlockContainer"] {padding-top:.2rem !important;}
     .block-container div[data-testid="stMarkdownContainer"]:has(.mast) {
       margin:0 0 14px 0; width:100%;}
     .block-container .mast,
     .block-container .mast.slim {margin-bottom:0; border-radius:14px; box-shadow:none;}
-    div[data-testid="stColumn"] > div,
-    div[data-testid="stColumn"] > div > [data-testid="stLayoutWrapper"] {
-      height:100% !important; display:flex !important; flex-direction:column !important;}
-    div[data-testid="stColumn"] > div > [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"] {
-      background:var(--card) !important; border:1px solid var(--line) !important;
-      border-radius:14px !important; box-shadow:var(--sh) !important;
-      padding:16px 14px 14px !important; height:100% !important; flex:1 1 auto !important;
-      min-height:220px; box-sizing:border-box;
-      display:flex !important; flex-direction:column !important;}
-    div[data-testid="stColumn"] > div > [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"] > div {
-      flex:1 1 auto !important; display:flex !important; flex-direction:column !important;
-      background:transparent !important; min-height:0 !important;}
-    div[data-testid="stColumn"] [data-testid="stVerticalBlock"] .svc,
-    div[data-testid="stColumn"] [data-testid="stVerticalBlock"] .svc.lead {
-      border:none !important; box-shadow:none !important; background:transparent !important;
-      padding:0 !important; min-height:0 !important; margin:0 !important; flex:1 1 auto;}
-    div[data-testid="stColumn"] [data-testid="stVerticalBlock"] .svc h3 {
-      min-height:2.6em; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
-      overflow:hidden;}
-    div[data-testid="stColumn"] [data-testid="stVerticalBlock"] .svc p {
-      margin-bottom:4px; min-height:2.9em; display:-webkit-box; -webkit-line-clamp:2;
-      -webkit-box-orient:vertical; overflow:hidden;}
-    div[data-testid="stColumn"] [data-testid="stVerticalBlock"] div.stButton,
-    div[data-testid="stColumn"] [data-testid="stVerticalBlock"] div.stLinkButton {
-      margin-top:auto !important; padding-top:14px;}
-    div[data-testid="stColumn"] [data-testid="stVerticalBlock"] [data-testid="stElementContainer"],
-    div[data-testid="stColumn"] [data-testid="stVerticalBlock"] [data-testid="stMarkdownContainer"],
-    div[data-testid="stColumn"] [data-testid="stVerticalBlock"] [data-testid="stMarkdown"] {
-      background:transparent !important;}
-    div[data-testid="stColumn"] [data-testid="stVerticalBlock"] [data-testid="stElementContainer"]:has(.svc) {
-      flex:1 1 auto !important;}
-    /* 메뉴 2열만 고정. 이전/다음/나가기 줄은 모바일에서 글자가 안 잘리게 둠 */
-    div[data-testid="stHorizontalBlock"] {
-      flex-direction:row !important; gap:12px !important; align-items:stretch !important; margin-bottom:4px;}
+    /* 흰 카드 테두리는 홈 메뉴(.svc) 칸에만 — 다른 화면 칸에 고정 흰 박스가 남지 않게 */
     div[data-testid="stHorizontalBlock"]:has(.svc) {
-      flex-wrap:nowrap !important;}
+      flex-wrap:nowrap !important; align-items:stretch !important;}
     div[data-testid="stHorizontalBlock"]:has(.svc) > div[data-testid="stColumn"] {
       min-width:0 !important; display:flex !important; flex-direction:column;}
-    div[data-testid="stHorizontalBlock"]:has(.svc) > div[data-testid="stColumn"] > div {
-      flex:1; display:flex; flex-direction:column; width:100%; min-width:0;}
+    div[data-testid="stHorizontalBlock"]:has(.svc) > div[data-testid="stColumn"] > div,
+    div[data-testid="stHorizontalBlock"]:has(.svc) > div[data-testid="stColumn"] > div > [data-testid="stLayoutWrapper"] {
+      height:auto !important; min-height:100% !important; display:flex !important; flex-direction:column !important;}
+    div[data-testid="stHorizontalBlock"]:has(.svc) > div[data-testid="stColumn"] > div > [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"] {
+      background:var(--card) !important; border:1px solid var(--line) !important;
+      border-radius:14px !important; box-shadow:var(--sh) !important;
+      padding:16px 14px 14px !important; height:auto !important; flex:1 1 auto !important;
+      min-height:0; box-sizing:border-box; overflow:visible !important;
+      display:flex !important; flex-direction:column !important;}
+    div[data-testid="stHorizontalBlock"]:has(.svc) > div[data-testid="stColumn"] > div > [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"] > div {
+      flex:1 1 auto !important; display:flex !important; flex-direction:column !important;
+      background:transparent !important; min-height:0 !important;}
+    div[data-testid="stHorizontalBlock"]:has(.svc) [data-testid="stVerticalBlock"] .svc,
+    div[data-testid="stHorizontalBlock"]:has(.svc) [data-testid="stVerticalBlock"] .svc.lead {
+      border:none !important; box-shadow:none !important; background:transparent !important;
+      padding:0 !important; min-height:0 !important; margin:0 !important; flex:1 1 auto;}
+    div[data-testid="stHorizontalBlock"]:has(.svc) [data-testid="stVerticalBlock"] .svc h3 {
+      min-height:0; display:block; overflow:visible; word-break:keep-all;}
+    div[data-testid="stHorizontalBlock"]:has(.svc) [data-testid="stVerticalBlock"] .svc p {
+      margin-bottom:4px; min-height:0; display:block; overflow:visible; word-break:keep-all;}
+    div[data-testid="stHorizontalBlock"]:has(.svc) [data-testid="stVerticalBlock"] div.stButton,
+    div[data-testid="stHorizontalBlock"]:has(.svc) [data-testid="stVerticalBlock"] div.stLinkButton {
+      margin-top:auto !important; padding-top:14px;}
+    div[data-testid="stHorizontalBlock"]:has(.svc) [data-testid="stVerticalBlock"] [data-testid="stElementContainer"],
+    div[data-testid="stHorizontalBlock"]:has(.svc) [data-testid="stVerticalBlock"] [data-testid="stMarkdownContainer"],
+    div[data-testid="stHorizontalBlock"]:has(.svc) [data-testid="stVerticalBlock"] [data-testid="stMarkdown"] {
+      background:transparent !important;}
+    div[data-testid="stHorizontalBlock"]:has(.svc) [data-testid="stVerticalBlock"] [data-testid="stElementContainer"]:has(.svc) {
+      flex:1 1 auto !important;}
+    div[data-testid="stHorizontalBlock"] {
+      flex-direction:row !important; gap:12px !important; align-items:stretch !important; margin-bottom:4px;}
     div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
       min-width:0 !important;}
     /* 이전·다음·나가기 */
@@ -108,30 +105,40 @@ st.markdown(
       white-space:nowrap !important; overflow:visible !important; text-overflow:clip !important;
       font-size:.9rem !important; color:var(--ink) !important;}
     @media (max-width:640px) {
-      section.main > div.block-container {padding:.4rem .75rem 1.3rem; margin-top:.1rem; border-radius:14px;}
+      section.main > div.block-container {padding:.45rem .7rem 1.4rem; margin-top:.1rem; border-radius:14px;}
       .block-container div[data-testid="stMarkdownContainer"]:has(.mast) {margin:0 0 12px 0; width:100%;}
       .mast-body {padding:14px 14px 15px;}
-      .mast h1 {font-size:1.22rem;}
-      .mast p {font-size:.84rem; margin-top:6px;}
+      .mast h1 {font-size:clamp(1.1rem, 4.6vw, 1.28rem);}
+      .mast p {font-size:clamp(.8rem, 3.4vw, .88rem); margin-top:6px;}
       .mast .tags span {font-size:.68rem; padding:3px 8px;}
       .sect {flex-wrap:wrap; gap:4px 8px; margin:14px 0 10px 0;}
       .sect strong {font-size:.95rem;}
       .sect span {font-size:.78rem;}
       div[data-testid="stHorizontalBlock"] {gap:8px !important;}
-      div[data-testid="stColumn"] > div > [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"] {
-        padding:12px 10px 10px !important; border-radius:12px !important; min-height:200px;}
+      div[data-testid="stHorizontalBlock"]:has(.svc) > div[data-testid="stColumn"] > div > [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"] {
+        padding:12px 10px 10px !important; border-radius:12px !important;}
       .svc {min-height:0; padding:0;}
-      .svc h3 {font-size:.92rem; margin-bottom:5px;}
-      .svc p {font-size:.78rem; line-height:1.45;}
+      .svc h3 {font-size:clamp(.88rem, 3.6vw, .96rem); margin-bottom:5px;}
+      .svc p {font-size:clamp(.76rem, 3.2vw, .84rem); line-height:1.45;}
       .svc-no {font-size:.62rem; margin-bottom:6px;}
-      div[data-testid="stColumn"] [data-testid="stVerticalBlock"] div.stButton,
-      div[data-testid="stColumn"] [data-testid="stVerticalBlock"] div.stLinkButton {padding-top:10px;}
-      div[data-testid="stColumn"] [data-testid="stVerticalBlock"] button {font-size:.82rem !important; min-height:2.2rem;}
+      div[data-testid="stHorizontalBlock"]:has(.svc) [data-testid="stVerticalBlock"] div.stButton,
+      div[data-testid="stHorizontalBlock"]:has(.svc) [data-testid="stVerticalBlock"] div.stLinkButton {padding-top:10px;}
+      div[data-testid="stHorizontalBlock"]:has(.svc) [data-testid="stVerticalBlock"] button {
+        font-size:.82rem !important; min-height:2.2rem;}
       div[data-testid="stElementContainer"]:has(.nav-mark) + div div.stButton > button,
       div[data-testid="stElementContainer"]:has(.nav-mark) + div [data-testid="stHorizontalBlock"] div.stButton > button {
         font-size:.82rem !important; padding:.5rem .25rem !important; min-height:2.4rem !important;}
       div[data-testid="stElementContainer"]:has(.nav-mark) + div div.stButton > button [data-testid="stMarkdownContainer"] p {
         font-size:.82rem !important; white-space:nowrap !important;}
+      /* 같은 칸 안에서만 줄바꿈 — 레이아웃은 유지 */
+      div.stButton > button, div.stFormSubmitButton > button {
+        white-space:normal !important; padding:.62rem .55rem !important;}
+      div.stButton > button [data-testid="stMarkdownContainer"] p,
+      div.stFormSubmitButton > button [data-testid="stMarkdownContainer"] p {
+        white-space:normal !important; word-break:keep-all !important; overflow-wrap:break-word !important;
+        font-size:clamp(.78rem, 3.3vw, .9rem) !important; line-height:1.35 !important;}
+      .qbox {font-size:clamp(.92rem, 3.8vw, 1.02rem); padding:14px 14px;}
+      .codebox {font-size:clamp(2rem, 12vw, 2.6rem); padding:16px 12px;}
     }
     header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecoration"],
     .stAppDeployButton, #MainMenu, footer {display:none !important;}
@@ -224,7 +231,11 @@ st.markdown(
     .who {min-width:0; flex:1;}
     .who b {display:block; font-size:.96rem; color:var(--ink); font-weight:680;
       white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-    .who small {color:var(--muted); font-size:.78rem;}
+    .who small {color:var(--muted); font-size:.78rem; display:block;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+    .who .org-short {display:none;}
+    .who .org-full {display:inline;}
+    .who .meta-bit {display:inline;}
     .who em {font-style:normal; font-size:.72rem; padding:1px 7px; border-radius:999px; margin-left:6px;}
     .who em.red {background:#fbeceb; color:var(--red);}
     .who em.blue {background:#e8f0fb; color:var(--blue);}
@@ -232,6 +243,18 @@ st.markdown(
     .rbar i {display:block; height:100%; border-radius:999px; background:linear-gradient(90deg,var(--navy-2),#3f77c4);}
     .val {width:78px; text-align:right; font-weight:750; color:var(--navy); font-size:.94rem; flex-shrink:0;}
     .val small {display:block; font-weight:500; color:var(--muted); font-size:.72rem;}
+    @media (max-width:640px) {
+      .rank {padding:4px 2px;}
+      .rank-row {gap:8px; padding:8px 8px; align-items:center;}
+      .pos {width:24px; height:24px; font-size:.78rem;}
+      .who b {font-size:.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+      .who small {font-size:.7rem; line-height:1.3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+      .who .org-full {display:none;}
+      .who .org-short {display:inline;}
+      .rbar {display:none;}
+      .val {width:auto; min-width:3.1rem; font-size:.86rem;}
+      .val small {font-size:.66rem;}
+    }
 
     /* ── 팀 대항 점수판 ────────────────────────── */
     .teams {display:flex; align-items:stretch; gap:10px; margin:4px 0 6px;}
@@ -252,12 +275,14 @@ st.markdown(
 
     /* ── 참가자 칩 ─────────────────────────────── */
     .peers {display:flex; flex-wrap:wrap; gap:7px; margin:2px 0 4px;}
-    .peer {display:inline-flex; align-items:center; gap:6px; background:var(--card); border:1px solid var(--line);
-      border-radius:999px; padding:5px 12px; font-size:.88rem; color:var(--ink); box-shadow:0 1px 2px rgba(11,31,58,.05);}
-    .peer i {width:7px; height:7px; border-radius:50%; background:#37b26b; display:inline-block;}
+    .peer {display:inline-flex; align-items:flex-start; gap:6px; background:var(--card); border:1px solid var(--line);
+      border-radius:12px; padding:5px 12px; font-size:.88rem; color:var(--ink); box-shadow:0 1px 2px rgba(11,31,58,.05);
+      max-width:100%;}
+    .peer i {width:7px; height:7px; border-radius:50%; background:#37b26b; display:inline-block; flex-shrink:0; margin-top:.4em;}
     .peer.red i {background:var(--red);} .peer.blue i {background:var(--blue);}
     .peer.host::after {content:"방장"; font-size:.68rem; color:#8a6d1c; background:#fbf3dd;
-      border:1px solid #ecd9a3; border-radius:999px; padding:1px 6px;}
+      border:1px solid #ecd9a3; border-radius:999px; padding:1px 6px; flex-shrink:0; align-self:center;}
+    .peer .org {display:block; font-size:.72rem; color:var(--muted); font-weight:500; word-break:keep-all; line-height:1.35; margin-top:2px;}
 
     /* ── 문제 ─────────────────────────────────── */
     .qbox {background:var(--card); border:1px solid var(--line); border-radius:14px;
@@ -286,9 +311,9 @@ st.markdown(
     div[data-testid="stButton"], div[data-testid="stFormSubmitButton"] {width:100% !important;}
     div.stButton > button, div.stFormSubmitButton > button {width:100% !important;}
     div.stButton > button, div.stFormSubmitButton > button {
-      white-space:nowrap !important; height:auto !important; min-height:2.8rem;
-      line-height:1.55; word-break:keep-all; overflow:visible !important; text-overflow:clip !important;
-      padding:.72rem 1.05rem; border-radius:11px !important; border:1px solid var(--line) !important;
+      white-space:normal !important; height:auto !important; min-height:2.8rem;
+      line-height:1.45; word-break:keep-all; overflow:visible !important; text-overflow:clip !important;
+      padding:.72rem .85rem; border-radius:11px !important; border:1px solid var(--line) !important;
       transition:transform .1s ease, box-shadow .12s ease, background .12s ease;}
     /* 글자는 button > div > span > stMarkdownContainer > p 안에 있다. */
     div.stButton > button [data-testid="stMarkdownContainer"] p,
@@ -298,8 +323,15 @@ st.markdown(
     a[data-testid="stBaseLinkButton"],
     a[data-testid="stBaseLinkButton"] p {
       font-family: "Pretendard", "Malgun Gothic", sans-serif !important;
-      font-weight:650 !important; font-size:.95rem !important; line-height:1.45 !important;
-      letter-spacing:-.01em !important; margin:0;}
+      font-weight:650 !important; font-size:.95rem !important; line-height:1.4 !important;
+      letter-spacing:-.01em !important; margin:0;
+      white-space:normal !important; overflow:visible !important; text-overflow:clip !important;
+      word-break:keep-all !important; overflow-wrap:break-word !important;}
+    div.stButton > button > div,
+    div.stFormSubmitButton > button > div,
+    div.stButton > button > div > span,
+    div.stFormSubmitButton > button > div > span {
+      max-width:100% !important; white-space:normal !important; overflow:visible !important;}
     div.stButton > button[kind="primary"] [data-testid="stMarkdownContainer"] p,
     div.stFormSubmitButton > button[kind="primary"] [data-testid="stMarkdownContainer"] p {
       color:#fff !important;}
@@ -616,7 +648,8 @@ def show_standings_board(
         out.append(
             f"<div class='{cls}'><span class='{pos}'>{rank}</span>"
             f"<span class='who'><b>{html.escape(r.get('name') or '')}</b>"
-            f"<small>{html.escape(r.get('org') or '')} · {int(r.get('games') or 0)}판 · 1등 {int(r.get('wins') or 0)}회</small></span>"
+            f"<small>{_org_rank_spans(r.get('org') or '')}"
+            f"<span class='meta-bit'> · {int(r.get('games') or 0)}판 · 1등 {int(r.get('wins') or 0)}회</span></small></span>"
             f"<span class='rbar'><i style='width:{max(2, min(100, int(100 * int(r.get('points') or 0) / top)))}%'></i></span>"
             f"<span class='val'>{int(r.get('points') or 0)}점<small>{int(r.get('score') or 0)}개</small></span></div>"
         )
@@ -698,9 +731,14 @@ def show_ranking(room: dict, pid: str, title: str = "실시간 순위") -> None:
         else:
             big, small = f"{r['score']}/{total}", f"{r['points']}점"
             width = int(100 * r["score"] / total)
+        org_html = _org_rank_spans(r.get("org") or {})
+        if org_html:
+            detail = f"{org_html}<span class='meta-bit'> · {html.escape(state)}</span>"
+        else:
+            detail = f"<span class='meta-bit'>{html.escape(state)}</span>"
         out.append(
             f"<div class='{cls}'><span class='{pos}'>{i}</span>"
-            f"<span class='who'><b>{html.escape(r['name'])}{side}</b><small>{html.escape(state)}</small></span>"
+            f"<span class='who'><b>{html.escape(r['name'])}{side}</b><small>{detail}</small></span>"
             f"<span class='rbar'><i style='width:{max(2, min(100, width))}%'></i></span>"
             f"<span class='val'>{big}<small>{small}</small></span></div>"
         )
@@ -842,6 +880,54 @@ def _go_room(room: dict) -> None:
         st.session_state.quiz_kind = "ox"
     st.query_params["room"] = room["code"]
     st.rerun()
+
+
+def _org_caption(room: dict, pid: str) -> str:
+    mine = rooms.player_org(room, pid)
+    host = room.get("org") or {}
+    mine_t = path_text(mine)
+    host_t = path_text(host)
+    if mine_t and host_t and org_key(mine) != org_key(host):
+        return f"내 소속 · {mine_t} · 방장 {host_t}"
+    return mine_t or host_t or ""
+
+
+def _short_org(org: dict | None) -> str:
+    """모바일용 짧은 소속. 지구대 이름이 겹칠 수 있어 경찰서·지구대·팀을 쓴다."""
+    o = org or {}
+    station = station_label(o.get("station") or "") or ""
+    unit = o.get("unit") or ""
+    team = o.get("team") or ""
+    agency = agency_label(o.get("agency") or "") or ""
+    bits = [station or agency, unit, team]
+    line = " · ".join(x for x in bits if x)
+    return line or path_text(o)
+
+
+def _short_org_text(line: str) -> str:
+    """path_text 문자열용. 시도청만 빼고 경찰서·지구대·팀을 남긴다."""
+    bits = [b.strip() for b in (line or "").split("·") if b.strip()]
+    if len(bits) >= 4:
+        return " · ".join(bits[1:])
+    if len(bits) == 3:
+        return " · ".join(bits)
+    return (line or "").strip()
+
+
+def _org_rank_spans(org: dict | str | None) -> str:
+    """PC는 전체 소속, 모바일은 짧은 소속(CSS로 전환)."""
+    if isinstance(org, dict):
+        full = path_text(org)
+        short = _short_org(org) or full
+    else:
+        full = (org or "").strip()
+        short = _short_org_text(full) or full
+    if not full:
+        return ""
+    return (
+        f"<span class='org-full'>{html.escape(full)}</span>"
+        f"<span class='org-short'>{html.escape(short)}</span>"
+    )
 
 
 def _law_oc() -> str:
@@ -1148,17 +1234,21 @@ def enter_screen() -> None:
         elif not org.get("unit") or not org.get("team"):
             st.error("시도청·경찰서·지구대·팀을 고르십시오.")
         else:
+            st.session_state.my_org = org
             st.session_state.host_draft = {"org": org, "name": name}
             st.session_state.phase = "host_setup"
             st.rerun()
     if join:
         if not name or not code:
             st.error("별명과 방 번호를 넣으십시오.")
+        elif not org.get("unit") or not org.get("team"):
+            st.error("시도청·경찰서·지구대·팀을 고르십시오.")
         else:
-            room = rooms.join(code, st.session_state.pid, name)
+            room = rooms.join(code, st.session_state.pid, name, org)
             if room is None:
                 st.error("방이 없습니다. 번호를 확인하십시오.")
             else:
+                st.session_state.my_org = org
                 _go_room(room)
 
 
@@ -1267,6 +1357,7 @@ def host_setup_screen() -> None:
             kind=kind,
         )
         st.session_state.host_seed = seed
+        st.session_state.my_org = org
         _go_room(room)
 
 
@@ -1293,7 +1384,7 @@ def lobby_screen() -> None:
     pid = st.session_state.pid
     mode = rooms.mode_of(room)
     lim = rooms.limit_sec(room)
-    st.caption(path_text(room.get("org") or {}))
+    st.caption(_org_caption(room, pid))
     st.markdown(f"<div class='codebox'>{room['code']}</div>", unsafe_allow_html=True)
     pills = [
         f"<span class='pill'>{html.escape(room['area_name'])}</span>",
@@ -1342,7 +1433,9 @@ def lobby_screen() -> None:
             if who == live.get("host_id"):
                 cls += " host"
             label = html.escape(p.get("name") or "")
-            chips.append(f"<span class='peer {cls}'><i></i>{label}</span>")
+            org_line = html.escape(_short_org(rooms.player_org(live, who, p)))
+            org_html = f"<span class='org'>{org_line}</span>" if org_line else ""
+            chips.append(f"<span class='peer {cls}'><i></i><span>{label}{org_html}</span></span>")
         _sect(f"들어온 사람 {len(chips)}명", "방장이 시작할 때까지 기다립니다.")
         st.markdown("<div class='peers'>" + "".join(chips) + "</div>", unsafe_allow_html=True)
         if live["status"] in ("countdown", "play", "done") and st.session_state.phase == "lobby":
@@ -1526,7 +1619,7 @@ def done_screen(room: dict, pid: str, deck: list[dict], total: int) -> None:
             show_standings_board(
                 live.get("kind") or "exam",
                 rooms.mode_of(live),
-                viewer=((me_live.get("name") or ""), path_text(live.get("org") or {})),
+                viewer=((me_live.get("name") or ""), path_text(rooms.player_org(live, pid, me_live))),
                 title="랭킹",
             )
         if not all_done:
@@ -1724,7 +1817,12 @@ def play_screen() -> None:
     room = rooms.begin_if_due(code) or room
     pid = st.session_state.pid
     if pid not in room["players"]:
-        rooms.join(code, pid, (st.session_state.get("player_name") or "").strip() or "참가")
+        rooms.join(
+            code,
+            pid,
+            (st.session_state.get("player_name") or "").strip() or "참가",
+            st.session_state.get("my_org") or {},
+        )
         room = rooms.load(code) or room
     me = room["players"][pid]
     deck = room["deck"]
@@ -1747,7 +1845,7 @@ def play_screen() -> None:
     if room.get("team_battle") and me.get("side"):
         cls = SIDE_CLASS.get(me["side"], "")
         head.append(f"<span class='pill {cls}'>{me['side']}</span>")
-    st.caption(path_text(room.get("org") or {}))
+    st.caption(_org_caption(room, pid))
     st.markdown("".join(head), unsafe_allow_html=True)
 
     if room["status"] == "countdown":

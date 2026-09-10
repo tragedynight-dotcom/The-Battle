@@ -138,7 +138,7 @@ def create(
             "play_at": None,
             "deck": deck,
             "players": {
-                host_id: _player(host_name, SIDES[0] if team_battle else ""),
+                host_id: _player(host_name, SIDES[0] if team_battle else "", org),
             },
         }
         _write(room)
@@ -244,9 +244,11 @@ def enter(
             if room is None:
                 return None
             if pid not in room["players"]:
-                room["players"][pid] = _player(name)
+                room["players"][pid] = _player(name, org=org)
             else:
                 room["players"][pid]["name"] = name
+                if org:
+                    room["players"][pid]["org"] = dict(org)
             _write(room)
             return room
         code = new_code()
@@ -261,7 +263,7 @@ def enter(
             "status": "lobby",
             "play_at": None,
             "deck": deck,
-            "players": {pid: _player(name)},
+            "players": {pid: _player(name, org=org)},
         }
         _write(room)
         return room
@@ -282,10 +284,11 @@ def ensure_play(code: str) -> dict | None:
     return _with_lock(code, inner)
 
 
-def _player(name: str, side: str = "") -> dict:
+def _player(name: str, side: str = "", org: dict | None = None) -> dict:
     return {
         "name": name,
         "side": side,
+        "org": dict(org or {}),
         "score": 0,
         "points": 0,
         "streak": 0,
@@ -299,6 +302,16 @@ def _player(name: str, side: str = "") -> dict:
         "done_at": None,
         "ms": 0,
     }
+
+
+def player_org(room: dict | None, pid: str | None = None, p: dict | None = None) -> dict:
+    """참가자 본인 소속. 없으면 방(방장) 소속으로 본다."""
+    if p is None and room and pid:
+        p = (room.get("players") or {}).get(pid) or {}
+    o = (p or {}).get("org")
+    if isinstance(o, dict) and (o.get("unit") or o.get("agency") or o.get("station")):
+        return o
+    return (room or {}).get("org") or {}
 
 
 def _reset_player(p: dict) -> None:
@@ -480,16 +493,18 @@ def _thin_side(room: dict) -> str:
     return min(SIDES, key=lambda s: tally[s])
 
 
-def join(code: str, pid: str, name: str) -> dict | None:
+def join(code: str, pid: str, name: str, org: dict | None = None) -> dict | None:
     def inner():
         room = _read(code)
         if room is None:
             return None
         if pid not in room["players"]:
             side = _thin_side(room) if room.get("team_battle") else ""
-            room["players"][pid] = _player(name, side)
+            room["players"][pid] = _player(name, side, org)
         else:
             room["players"][pid]["name"] = name
+            if org:
+                room["players"][pid]["org"] = dict(org)
             if room.get("team_battle") and not room["players"][pid].get("side"):
                 room["players"][pid]["side"] = _thin_side(room)
         _write(room)
@@ -696,6 +711,7 @@ def ranking(room: dict) -> list[dict]:
                 "pid": pid,
                 "name": p.get("name") or "",
                 "side": p.get("side") or "",
+                "org": player_org(room, pid, p),
                 "score": int(p.get("score") or 0),
                 "points": int(p.get("points") or 0),
                 "best": int(p.get("best") or 0),

@@ -159,18 +159,17 @@ def record(room: dict) -> None:
     data = _load()
     if any(m.get("id") == mid for m in data["matches"]):
         return
-    from src.rooms import ranking
+    from src.rooms import player_org, ranking
 
     order = ranking(room)
-    org = room.get("org") or {}
-    org_line = path_text(org)
+    host_line = path_text(room.get("org") or {})
     when = datetime.now().isoformat(timespec="seconds")
     data["matches"].append(
         {
             "id": mid,
             "at": when,
             "code": room.get("code") or "",
-            "org": org_line,
+            "org": host_line,
             "area": room.get("area_name") or "",
             "mode": room.get("mode") or "classic",
             "kind": room.get("kind") or "exam",
@@ -181,7 +180,11 @@ def record(room: dict) -> None:
     )
     data["matches"] = data["matches"][-300:]
     for i, row in enumerate(order, 1):
-        key = _pid_key(org, row["name"])
+        porg = row.get("org") if isinstance(row.get("org"), dict) else None
+        if not porg:
+            porg = player_org(room, row.get("pid"), players.get(row.get("pid") or ""))
+        org_line = path_text(porg)
+        key = _pid_key(porg, row["name"])
         p = data["people"].setdefault(
             key,
             {
