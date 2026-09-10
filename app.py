@@ -85,13 +85,28 @@ st.markdown(
       background:transparent !important;}
     div[data-testid="stColumn"] [data-testid="stVerticalBlock"] [data-testid="stElementContainer"]:has(.svc) {
       flex:1 1 auto !important;}
+    /* 메뉴 2열만 고정. 이전/다음/나가기 줄은 모바일에서 글자가 안 잘리게 둠 */
     div[data-testid="stHorizontalBlock"] {
-      flex-direction:row !important; flex-wrap:nowrap !important;
-      gap:12px !important; align-items:stretch !important; margin-bottom:4px;}
-    div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
+      flex-direction:row !important; gap:12px !important; align-items:stretch !important; margin-bottom:4px;}
+    div[data-testid="stHorizontalBlock"]:has(.svc) {
+      flex-wrap:nowrap !important;}
+    div[data-testid="stHorizontalBlock"]:has(.svc) > div[data-testid="stColumn"] {
       min-width:0 !important; display:flex !important; flex-direction:column;}
-    div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] > div {
+    div[data-testid="stHorizontalBlock"]:has(.svc) > div[data-testid="stColumn"] > div {
       flex:1; display:flex; flex-direction:column; width:100%; min-width:0;}
+    div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
+      min-width:0 !important;}
+    /* 이전·다음·나가기 */
+    div[data-testid="stElementContainer"]:has(.nav-mark) + div[data-testid="stHorizontalBlock"],
+    div[data-testid="stElementContainer"]:has(.nav-mark) + div [data-testid="stHorizontalBlock"] {
+      flex-wrap:nowrap !important; gap:8px !important;}
+    div[data-testid="stElementContainer"]:has(.nav-mark) + div div.stButton > button,
+    div[data-testid="stElementContainer"]:has(.nav-mark) + div [data-testid="stHorizontalBlock"] div.stButton > button {
+      white-space:nowrap !important; min-width:0 !important; padding:.55rem .35rem !important;
+      font-size:.9rem !important;}
+    div[data-testid="stElementContainer"]:has(.nav-mark) + div div.stButton > button [data-testid="stMarkdownContainer"] p {
+      white-space:nowrap !important; overflow:visible !important; text-overflow:clip !important;
+      font-size:.9rem !important; color:var(--ink) !important;}
     @media (max-width:640px) {
       section.main > div.block-container {padding:.4rem .75rem 1.3rem; margin-top:.1rem; border-radius:14px;}
       .block-container div[data-testid="stMarkdownContainer"]:has(.mast) {margin:0 0 12px 0; width:100%;}
@@ -112,6 +127,11 @@ st.markdown(
       div[data-testid="stColumn"] [data-testid="stVerticalBlock"] div.stButton,
       div[data-testid="stColumn"] [data-testid="stVerticalBlock"] div.stLinkButton {padding-top:10px;}
       div[data-testid="stColumn"] [data-testid="stVerticalBlock"] button {font-size:.82rem !important; min-height:2.2rem;}
+      div[data-testid="stElementContainer"]:has(.nav-mark) + div div.stButton > button,
+      div[data-testid="stElementContainer"]:has(.nav-mark) + div [data-testid="stHorizontalBlock"] div.stButton > button {
+        font-size:.82rem !important; padding:.5rem .25rem !important; min-height:2.4rem !important;}
+      div[data-testid="stElementContainer"]:has(.nav-mark) + div div.stButton > button [data-testid="stMarkdownContainer"] p {
+        font-size:.82rem !important; white-space:nowrap !important;}
     }
     header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecoration"],
     .stAppDeployButton, #MainMenu, footer {display:none !important;}
@@ -135,10 +155,12 @@ st.markdown(
     .mast h1 .battle {font-family:"Sora", "Pretendard", sans-serif !important; font-weight:700;
       color:var(--accent); margin-left:.15em;}
     .mast p {margin:6px 0 0 0; color:var(--muted); line-height:1.55; max-width:38rem; font-size:.9rem; word-break:keep-all;}
-    .mast.slim {margin-bottom:12px;}
-    .mast.slim .mast-body {padding:10px 14px;}
+    .mast.slim {margin-bottom:12px; display:flex; align-items:center; justify-content:space-between;
+      gap:10px; padding:11px 16px;}
+    .mast.slim .mast-body {padding:0;}
     .slim-title {color:var(--ink); font-weight:720; font-size:.92rem; margin-left:10px; padding-left:11px;
       border-left:1px solid var(--line); letter-spacing:-.01em;}
+    .mast-right {font-size:.72rem; color:var(--muted); white-space:nowrap;}
     .mast .tags {margin-top:9px; display:flex; flex-wrap:wrap; gap:6px;}
     .block-container div[data-testid="stMarkdownContainer"]:has(.mast) {padding-top:0 !important;}
     .block-container div[data-testid="stElementContainer"]:has(.mast) {margin-top:0 !important; padding-top:0 !important;}
@@ -264,9 +286,9 @@ st.markdown(
     div[data-testid="stButton"], div[data-testid="stFormSubmitButton"] {width:100% !important;}
     div.stButton > button, div.stFormSubmitButton > button {width:100% !important;}
     div.stButton > button, div.stFormSubmitButton > button {
-      white-space:normal; height:auto !important; min-height:2.8rem;
-      line-height:1.55; word-break:keep-all; overflow-wrap:break-word; padding:.72rem 1.05rem;
-      border-radius:11px !important; border:1px solid var(--line) !important;
+      white-space:nowrap !important; height:auto !important; min-height:2.8rem;
+      line-height:1.55; word-break:keep-all; overflow:visible !important; text-overflow:clip !important;
+      padding:.72rem 1.05rem; border-radius:11px !important; border:1px solid var(--line) !important;
       transition:transform .1s ease, box-shadow .12s ease, background .12s ease;}
     /* 글자는 button > div > span > stMarkdownContainer > p 안에 있다. */
     div.stButton > button [data-testid="stMarkdownContainer"] p,
@@ -492,22 +514,12 @@ def _render_header(phase: str) -> None:
 
 
 def _mast_slim(title: str, right: str = "") -> None:
-    right_html = f"<span>{html.escape(right)}</span>" if right else ""
+    right_html = f"<span class='mast-right'>{html.escape(right)}</span>" if right else ""
+    # Streamlit이 깊게 중첩된 div를 깨뜨려 </div>가 글자로 보이는 경우가 있어 평평하게 쓴다.
     st.markdown(
-        f"""
-        <div class="mast slim">
-          <div class="mast-body">
-            <div class="mast-meta">
-              <span class="brand">
-                <span class="mark"></span>
-                <span class="brand-name">The Battle</span>
-                <span class="slim-title">{html.escape(title)}</span>
-              </span>
-              {right_html}
-            </div>
-          </div>
-        </div>
-        """,
+        f"<div class='mast slim'><span class='brand'><span class='mark'></span>"
+        f"<span class='brand-name'>The Battle</span>"
+        f"<span class='slim-title'>{html.escape(title)}</span></span>{right_html}</div>",
         unsafe_allow_html=True,
     )
 
@@ -1853,32 +1865,32 @@ def play_screen() -> None:
             st.error("아직 안 푼 문제가 있습니다. 이전으로 돌아가 고르십시오.")
 
     if mode == "classic":
-        st.markdown('<div class="mini-mark"></div>', unsafe_allow_html=True)
-        nav = st.columns([1, 1, 1, 3])
+        st.markdown('<div class="nav-mark"></div>', unsafe_allow_html=True)
+        nav = st.columns(3)
         with nav[0]:
-            if st.button("이전", disabled=idx <= 0, key="nav_prev"):
+            if st.button("이전", disabled=idx <= 0, key="nav_prev", use_container_width=True):
                 _beep("tick")
                 rooms.seek(code, pid, idx - 1)
                 st.rerun()
         with nav[1]:
-            if st.button("다음", key="nav_next"):
+            if st.button("다음", key="nav_next", use_container_width=True):
                 _beep("tick")
                 if _advance(code, pid, idx, total):
                     st.rerun()
                 else:
                     st.error("아직 안 푼 문제가 있습니다. 이전으로 돌아가 고르십시오.")
         with nav[2]:
-            if st.button("나가기", key="leave_play"):
+            if st.button("나가기", key="leave_play", use_container_width=True):
                 st.session_state.phase = "enter"
                 st.session_state.pop("code", None)
                 _drop_room()
                 st.rerun()
     else:
         st.caption("되돌아갈 수 없습니다. 고르면 바로 다음 문제로 갑니다.")
-        st.markdown('<div class="mini-mark"></div>', unsafe_allow_html=True)
+        st.markdown('<div class="nav-mark"></div>', unsafe_allow_html=True)
         b1, _ = st.columns([1, 4])
         with b1:
-            if st.button("나가기", key="leave_play2"):
+            if st.button("나가기", key="leave_play2", use_container_width=True):
                 st.session_state.phase = "enter"
                 st.session_state.pop("code", None)
                 _drop_room()
