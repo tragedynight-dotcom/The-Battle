@@ -141,20 +141,27 @@ st.markdown(
         justify-content:center !important;}
       div[data-testid="stElementContainer"]:has(.nav-mark) + div div.stButton > button [data-testid="stMarkdownContainer"] p {
         font-size:.82rem !important; white-space:nowrap !important; text-align:center !important;}
-      /* 같은 칸 안에서만 줄바꿈 — 레이아웃은 유지 */
+      /* 객관식 보기만 줄바꿈. 액션 버튼은 한 줄 */
+      div[data-testid="stElementContainer"]:has(.choice-mark) ~ div div.stButton > button,
+      div[data-testid="stElementContainer"]:has(.choice-mark) ~ div div.stButton > button [data-testid="stMarkdownContainer"] p {
+        white-space:normal !important; word-break:keep-all !important; overflow-wrap:normal !important;
+        line-break:strict !important;}
+      div.stButton > button[kind="primary"] [data-testid="stMarkdownContainer"] p,
+      div.stFormSubmitButton > button [data-testid="stMarkdownContainer"] p,
+      div.stLinkButton > a [data-testid="stMarkdownContainer"] p {
+        white-space:nowrap !important; word-break:keep-all !important; overflow-wrap:normal !important;
+        font-size:clamp(.82rem, 3.2vw, .92rem) !important; text-align:center !important;}
       div.stButton > button, div.stFormSubmitButton > button {
-        white-space:normal !important; padding:.62rem .55rem !important;}
-      div.stButton > button [data-testid="stMarkdownContainer"] p,
-      div.stFormSubmitButton > button [data-testid="stMarkdownContainer"] p {
-        white-space:normal !important; word-break:keep-all !important; overflow-wrap:break-word !important;
-        font-size:clamp(.78rem, 3.3vw, .9rem) !important; line-height:1.35 !important;}
+        padding:.62rem .7rem !important;}
       /* 내비 버튼은 가운데 정렬·한 줄 유지 우선 */
       div[data-testid="stElementContainer"]:has(.nav-mark) + div div.stButton > button,
       div[data-testid="stElementContainer"]:has(.nav-mark) + div [data-testid="stHorizontalBlock"] div.stButton > button {
         white-space:nowrap !important;}
       div[data-testid="stElementContainer"]:has(.nav-mark) + div div.stButton > button [data-testid="stMarkdownContainer"] p {
         white-space:nowrap !important; text-align:center !important;}
-      .qbox {font-size:clamp(.92rem, 3.8vw, 1.02rem); padding:14px 14px;}
+      .qbox {font-size:clamp(.92rem, 3.8vw, 1.02rem); padding:14px 14px;
+        word-break:keep-all; overflow-wrap:normal; line-break:strict;}
+      .qbox .stem {word-break:keep-all; overflow-wrap:normal; line-break:strict;}
       .codebox {font-size:clamp(2rem, 12vw, 2.6rem); padding:16px 12px;}
     }
     header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecoration"],
@@ -219,8 +226,8 @@ st.markdown(
     }
     .hud {background:var(--navy); border-radius:13px; padding:11px 15px 12px; color:#fff;
       box-shadow:0 6px 16px rgba(59,70,88,.16);}
-    .hud-row {display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
-    .hud .chip {font-size:.79rem; padding:4px 10px; border-radius:8px; background:rgba(255,255,255,.11);
+    .hud-row {display:flex; align-items:center; gap:6px; flex-wrap:wrap; justify-content:flex-start;}
+    .hud .chip {font-size:.74rem; padding:4px 8px; border-radius:8px; background:rgba(255,255,255,.11);
       border:1px solid rgba(255,255,255,.14); color:#cddcec; white-space:nowrap;}
     .hud .chip b {color:#fff; font-weight:750; margin-left:4px;}
     .hud .chip.gold {background:rgba(201,162,39,.22); border-color:rgba(232,208,145,.5); color:#f2e2b8;}
@@ -305,7 +312,7 @@ st.markdown(
     /* ── 문제 ─────────────────────────────────── */
     .qbox {background:var(--card); border:1px solid var(--line); border-radius:14px;
       padding:20px 22px; margin:12px 0 14px 0; line-height:1.78; word-break:keep-all;
-      overflow-wrap:break-word; font-size:1.06rem; color:var(--ink); box-shadow:var(--sh); position:relative;}
+      overflow-wrap:normal; line-break:strict; font-size:1.06rem; color:var(--ink); box-shadow:var(--sh); position:relative;}
     .qbox::before {content:""; position:absolute; left:0; top:16px; bottom:16px; width:4px;
       border-radius:0 4px 4px 0; background:linear-gradient(180deg,var(--navy-2),var(--gold));}
     .qbox.x2::before {background:linear-gradient(180deg,var(--gold),#e0743a);}
@@ -313,11 +320,11 @@ st.markdown(
       display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
     .qbox .meta .x2tag {background:#fdf0dd; color:#9a5a12; border:1px solid #f0cf9d;
       border-radius:999px; padding:2px 9px; font-weight:750;}
-    .qbox .stem {white-space:pre-wrap;}
-    .qbox .ox-ask {margin:0 0 10px; color:var(--muted); font-size:.9rem;}
-    .qbox .ox-ctx {margin:0 0 10px; color:#4d5b6e; font-size:.92rem; line-height:1.6;}
+    .qbox .stem {white-space:pre-wrap; word-break:keep-all; overflow-wrap:normal; line-break:strict;}
+    .qbox .ox-ask {margin:0 0 10px; color:var(--muted); font-size:.9rem; word-break:keep-all;}
+    .qbox .ox-ctx {margin:0 0 10px; color:#4d5b6e; font-size:.92rem; line-height:1.6; word-break:keep-all;}
     .qbox .ox-say {margin:0; background:#f4f7fb; border:1px solid #d9e1ed; border-radius:12px;
-      padding:14px 16px; font-size:1.12rem; font-weight:650; line-height:1.7;}
+      padding:14px 16px; font-size:1.12rem; font-weight:650; line-height:1.7; word-break:keep-all;}
     .codebox {font-size:3rem; font-weight:800; letter-spacing:.22em; color:var(--navy); margin:8px 0 10px;
       background:var(--card); border:1px solid var(--line); border-radius:16px; padding:20px 16px 20px 26px;
       text-align:center; box-shadow:var(--sh);}
@@ -330,7 +337,8 @@ st.markdown(
     div.stButton > button, div.stFormSubmitButton > button {width:100% !important;}
     div.stButton > button, div.stFormSubmitButton > button {
       white-space:normal !important; height:auto !important; min-height:2.8rem;
-      line-height:1.45; word-break:keep-all; overflow:visible !important; text-overflow:clip !important;
+      line-height:1.45; word-break:keep-all !important; overflow-wrap:normal !important;
+      line-break:strict; overflow:visible !important; text-overflow:clip !important;
       padding:.72rem .85rem; border-radius:11px !important; border:1px solid var(--line) !important;
       transition:transform .1s ease, box-shadow .12s ease, background .12s ease;}
     /* 글자는 button > div > span > stMarkdownContainer > p 안에 있다. */
@@ -341,29 +349,47 @@ st.markdown(
     a[data-testid="stBaseLinkButton"],
     a[data-testid="stBaseLinkButton"] p {
       font-family: "Pretendard", "Malgun Gothic", sans-serif !important;
-      font-weight:650 !important; font-size:.95rem !important; line-height:1.4 !important;
+      font-weight:650 !important; font-size:.95rem !important; line-height:1.45 !important;
       letter-spacing:-.01em !important; margin:0;
       white-space:normal !important; overflow:visible !important; text-overflow:clip !important;
-      word-break:keep-all !important; overflow-wrap:break-word !important;}
+      word-break:keep-all !important; overflow-wrap:normal !important; line-break:strict !important;}
     div.stButton > button > div,
     div.stFormSubmitButton > button > div,
     div.stButton > button > div > span,
     div.stFormSubmitButton > button > div > span {
-      max-width:100% !important; white-space:normal !important; overflow:visible !important;}
+      max-width:100% !important; white-space:normal !important; overflow:visible !important;
+      word-break:keep-all !important;}
+    /* 짧은 액션(홈·방 열기·요지·원문)은 한 줄 유지 */
     div.stButton > button[kind="primary"] [data-testid="stMarkdownContainer"] p,
     div.stFormSubmitButton > button[kind="primary"] [data-testid="stMarkdownContainer"] p {
-      color:#fff !important;}
-    div.stButton > button[kind="secondary"] {background:var(--card); justify-content:flex-start !important;
+      color:#fff !important; text-align:center !important; white-space:nowrap !important;}
+    div.stLinkButton > a [data-testid="stMarkdownContainer"] p,
+    a[data-testid="stBaseLinkButton"] p {
+      text-align:center !important; white-space:nowrap !important;}
+    /* 객관식 보기(secondary + choice-mark)만 왼쪽 정렬. 그 외 secondary(뒤로·홈)는 가운데 */
+    div.stButton > button[kind="secondary"] {background:var(--card); justify-content:center !important;
       color:var(--ink) !important;}
     div.stButton > button[kind="secondary"] > div,
-    div.stButton > button[kind="secondary"] > div > span {width:100%; justify-content:flex-start !important;}
+    div.stButton > button[kind="secondary"] > div > span {width:100%; justify-content:center !important;}
     div.stButton > button[kind="secondary"] [data-testid="stMarkdownContainer"],
     div.stButton > button[kind="secondary"] [data-testid="stMarkdownContainer"] p {
-      text-align:left !important; color:var(--ink) !important;}
+      text-align:center !important; color:var(--ink) !important; white-space:normal !important;
+      word-break:keep-all !important; overflow-wrap:normal !important; line-break:strict !important;}
+    div[data-testid="stElementContainer"]:has(.choice-mark) + div div.stButton > button[kind="secondary"],
+    div[data-testid="stElementContainer"]:has(.choice-mark) ~ div div.stButton > button[kind="secondary"] {
+      justify-content:flex-start !important;}
+    div[data-testid="stElementContainer"]:has(.choice-mark) + div div.stButton > button[kind="secondary"] > div,
+    div[data-testid="stElementContainer"]:has(.choice-mark) + div div.stButton > button[kind="secondary"] > div > span,
+    div[data-testid="stElementContainer"]:has(.choice-mark) ~ div div.stButton > button[kind="secondary"] > div,
+    div[data-testid="stElementContainer"]:has(.choice-mark) ~ div div.stButton > button[kind="secondary"] > div > span {
+      justify-content:flex-start !important;}
+    div[data-testid="stElementContainer"]:has(.choice-mark) + div div.stButton > button[kind="secondary"] [data-testid="stMarkdownContainer"] p,
+    div[data-testid="stElementContainer"]:has(.choice-mark) ~ div div.stButton > button[kind="secondary"] [data-testid="stMarkdownContainer"] p {
+      text-align:left !important;}
     div.stButton > button[kind="secondary"]:hover {border-color:var(--navy-2) !important; background:#f5f7fa;}
     div.stButton > button[kind="primary"], div.stFormSubmitButton > button[kind="primary"],
     div.stLinkButton > a[kind="primary"], a[data-testid="stBaseLinkButton"] {
-      justify-content:center; background:var(--navy) !important; color:#fff !important;
+      justify-content:center !important; background:var(--navy) !important; color:#fff !important;
       border-color:var(--navy) !important; box-shadow:0 2px 8px rgba(59,70,88,.14);
       font-family: "Pretendard", "Malgun Gothic", sans-serif !important;
       font-weight:650 !important; font-size:.95rem !important;}
@@ -373,9 +399,9 @@ st.markdown(
       color:#fff !important;}
     div.stLinkButton > a {width:100% !important; border-radius:11px !important;
       min-height:2.8rem; display:inline-flex !important; align-items:center; justify-content:center;
-      padding:.72rem 1.05rem !important; box-sizing:border-box;}
+      padding:.72rem .85rem !important; box-sizing:border-box; white-space:nowrap !important;}
     div.stButton > button:active {transform:translateY(0);}
-    /* 메뉴 카드 안 시작하기·열기 글씨 통일 (primary만 흰 글씨) */
+
     div[data-testid="stColumn"] [data-testid="stVerticalBlock"] div.stButton > button[kind="primary"],
     div[data-testid="stColumn"] [data-testid="stVerticalBlock"] div.stLinkButton > a[kind="primary"],
     div[data-testid="stColumn"] [data-testid="stVerticalBlock"] a[data-testid="stBaseLinkButton"] {
@@ -428,17 +454,19 @@ st.markdown(
 
     /* ── 결과·판례 ─────────────────────────────── */
     .ok {background:#e9f7ef; border:1px solid #b3e0c6; border-left:4px solid var(--ok); border-radius:10px;
-      padding:11px 13px; word-break:keep-all; white-space:pre-wrap;}
+      padding:11px 13px; word-break:keep-all; overflow-wrap:normal; line-break:strict; white-space:pre-wrap;}
     .bad {background:#fdeeec; border:1px solid #f3c6c1; border-left:4px solid var(--bad); border-radius:10px;
-      padding:11px 13px; word-break:keep-all; white-space:pre-wrap;}
+      padding:11px 13px; word-break:keep-all; overflow-wrap:normal; line-break:strict; white-space:pre-wrap;}
     .case-card {background:var(--card); border:1px solid var(--line); border-radius:12px;
       padding:14px 16px 12px; margin:10px 0 6px 0; box-shadow:var(--sh);}
-    .case-meta {margin:0; font-size:.88rem; color:var(--muted);}
-    .case-name {margin:7px 0 0 0; font-size:1.1rem; font-weight:680; line-height:1.55; color:var(--navy); word-break:keep-all;}
+    .case-meta {margin:0; font-size:.88rem; color:var(--muted); word-break:keep-all;}
+    .case-name {margin:7px 0 0 0; font-size:1.1rem; font-weight:680; line-height:1.55; color:var(--navy);
+      word-break:keep-all; overflow-wrap:normal; line-break:strict;}
     .brief {background:var(--card); border:1px solid var(--line); border-left:4px solid var(--gold);
       border-radius:12px; padding:12px 16px; margin:7px 0; box-shadow:var(--sh);}
-    .brief p {margin:0; font-size:.83rem; color:var(--muted);}
-    .brief b {display:block; margin-top:3px; font-size:1rem; color:var(--navy); font-weight:680; word-break:keep-all;}
+    .brief p {margin:0; font-size:.83rem; color:var(--muted); word-break:keep-all;}
+    .brief b {display:block; margin-top:3px; font-size:1rem; color:var(--navy); font-weight:680;
+      word-break:keep-all; overflow-wrap:normal; line-break:strict;}
 
     /* ── 접는 칸·알림 ──────────────────────────── */
     div[data-testid="stExpander"] {border:1px solid var(--line) !important; border-radius:12px !important;
@@ -927,6 +955,7 @@ def pick_choice(item: dict, key: str, selected: int | None = None) -> int | None
                 if st.button(c, key=f"{key}_{i}", type=kind):
                     return i
         return None
+    st.markdown("<div class='choice-mark'></div>", unsafe_allow_html=True)
     for i, c in enumerate(item["choices"]):
         kind = "primary" if selected is not None and i == selected else "secondary"
         if st.button(f"{circle(i)} {c}", key=f"{key}_{i}", type=kind):
@@ -1164,12 +1193,10 @@ def hub_screen() -> None:
 
 
 def cases_screen() -> None:
-    back, _ = st.columns([1, 3])
-    with back:
-        if st.button("← 홈으로", key="cases_back_hub"):
-            st.session_state.phase = "hub"
-            st.rerun()
-            return
+    if st.button("← 홈으로", key="cases_back_hub", use_container_width=True):
+        st.session_state.phase = "hub"
+        st.rerun()
+        return
     st.caption("출처: 법제처 국가법령정보 공동활용. 직무·교통·형사·보호 쟁점으로 대법원 공식 판례만 가져옵니다.")
     labels = [t[0] for t in precedent.FIELD_TOPICS]
     pick = st.selectbox("쟁점", labels, key="case_topic")
@@ -1212,18 +1239,14 @@ def cases_screen() -> None:
             unsafe_allow_html=True,
         )
         rid = row.get("id") or ""
-        st.markdown('<div class="case-actions-mark"></div>', unsafe_allow_html=True)
-        b1, b2, _ = st.columns([1.05, 1.4, 3.55])
-        with b1:
-            if st.button("요지 보기", key=f"case_open_{rid}"):
-                st.session_state.case_open = rid
-                st.rerun()
-        with b2:
-            st.link_button(
-                "법령정보센터 원문",
-                precedent.official_link(rid, row.get("사건번호") or ""),
-                use_container_width=True,
-            )
+        if st.button("요지 보기", key=f"case_open_{rid}", use_container_width=True):
+            st.session_state.case_open = rid
+            st.rerun()
+        st.link_button(
+            "원문 보기",
+            precedent.official_link(rid, row.get("사건번호") or ""),
+            use_container_width=True,
+        )
         if open_id and rid and open_id == rid:
             detail = _cached_detail(oc, rid)
             if not detail:
@@ -1240,12 +1263,10 @@ def cases_screen() -> None:
 
 
 def laws_screen() -> None:
-    back, _ = st.columns([1, 3])
-    with back:
-        if st.button("← 홈으로", key="laws_back_hub"):
-            st.session_state.phase = "hub"
-            st.rerun()
-            return
+    if st.button("← 홈으로", key="laws_back_hub", use_container_width=True):
+        st.session_state.phase = "hub"
+        st.rerun()
+        return
     st.caption("출처: 법제처. 소관부처 코드 경찰청(1320000)만 조회합니다. 개정 이유는 공식 제개정이유만 보여 줍니다.")
     hide_org = st.checkbox("직제는 빼기", value=True, key="law_hide_org")
     oc = _law_oc()
@@ -1284,18 +1305,14 @@ def laws_screen() -> None:
             unsafe_allow_html=True,
         )
         rid = row.get("id") or ""
-        st.markdown('<div class="case-actions-mark"></div>', unsafe_allow_html=True)
-        b1, b2, _ = st.columns([1.05, 1.4, 3.55])
-        with b1:
-            if st.button("개정 이유", key=f"law_open_{rid}"):
-                st.session_state.law_open = rid
-                st.rerun()
-        with b2:
-            st.link_button(
-                "법령정보센터 원문",
-                precedent.official_law_link(rid, row.get("법령명") or ""),
-                use_container_width=True,
-            )
+        if st.button("개정 이유", key=f"law_open_{rid}", use_container_width=True):
+            st.session_state.law_open = rid
+            st.rerun()
+        st.link_button(
+            "원문 보기",
+            precedent.official_law_link(rid, row.get("법령명") or ""),
+            use_container_width=True,
+        )
         if open_id and rid and open_id == rid:
             detail = _cached_amend(oc, rid)
             reason = (detail.get("제개정이유") or "").strip()
@@ -1327,12 +1344,10 @@ def _cached_amend(oc: str, mst: str) -> dict[str, str]:
 
 
 def enter_screen() -> None:
-    back, _ = st.columns([1, 3])
-    with back:
-        if st.button("← 홈으로", key="enter_back_hub"):
-            st.session_state.phase = "hub"
-            st.rerun()
-            return
+    if st.button("← 홈으로", key="enter_back_hub", use_container_width=True):
+        st.session_state.phase = "hub"
+        st.rerun()
+        return
     kind = "실무역량평가 OX" if st.session_state.get("quiz_kind") == "ox" else EXAM_TITLE
     _sect(kind, "시도청·경찰서·지구대·파출소·팀을 고른 뒤, 방을 열거나 방 번호로 들어옵니다.")
     org = pick_org()
@@ -1342,11 +1357,8 @@ def enter_screen() -> None:
     with st.form("enter_form", clear_on_submit=False):
         name = st.text_input("별명", placeholder="예: 순찰이", key="player_name")
         join_code = st.text_input("방 번호", value=qcode, max_chars=4, placeholder="방장이 부른 4자리", key="join_code")
-        c1, c2 = st.columns(2)
-        with c1:
-            make = st.form_submit_button("방 만들기", type="primary")
-        with c2:
-            join = st.form_submit_button("방 번호로 들어가기")
+        make = st.form_submit_button("방 만들기", type="primary", use_container_width=True)
+        join = st.form_submit_button("방 번호로 들어가기", use_container_width=True)
     name = (name or "").strip()
     code = str(join_code or "").strip()
     if make:
@@ -1453,13 +1465,10 @@ def host_setup_screen() -> None:
     if kind == "ox":
         st.caption("설명이 맞으면 O, 틀리면 X입니다. 몇 개인지 묻는 문제는 숫자를 넣습니다.")
 
-    go, back, _ = st.columns([1.6, 1, 2.4])
-    with back:
-        if st.button("뒤로", key="setup_back"):
-            st.session_state.phase = "enter"
-            st.rerun()
-    with go:
-        open_room = st.button("이 설정으로 방 열기", type="primary")
+    open_room = st.button("이 설정으로 방 열기", type="primary", use_container_width=True)
+    if st.button("뒤로", key="setup_back", use_container_width=True):
+        st.session_state.phase = "enter"
+        st.rerun()
     if open_room:
         seed = random.randint(1, 10_000_000)
         deck, stored_id, shown = _build_deck(area_id, count, seed, kind)
