@@ -20,6 +20,33 @@ EXAM_TITLE = "실무역량평가(객관식)"
 EXAM_DESC = "객관식 문제로 개인전·단체전 등 여러 모드에서 겨룹니다."
 OX_DESC = "OX문제로 개인전·단체전 등 여러 모드에서 겨룹니다."
 
+# WORD JOINER — CSS keep-all이 Streamlit 버튼/삼성브라우저에서 무시될 때
+# "단계" → "단"+WJ+"계"로 묶어 음절 중간 줄바꿈을 막는다.
+_WJ = "\u2060"
+
+
+def glue_kr(text: str) -> str:
+    """공백·구두점 단위로만 줄바꿈되고, 단어 안 음절은 붙인다."""
+    if not text:
+        return text
+    out: list[str] = []
+    buf: list[str] = []
+
+    def flush() -> None:
+        if buf:
+            out.append(_WJ.join(buf))
+            buf.clear()
+
+    for ch in text:
+        if ch.isspace() or ch in "·•|/｜,.;:!?()[]{}「」『』\"'“”‘’":
+            flush()
+            out.append(ch)
+        else:
+            buf.append(ch)
+    flush()
+    return "".join(out)
+
+
 st.set_page_config(page_title=APP_TITLE, page_icon="🛡️", layout="wide")
 st.markdown(
     """
@@ -37,6 +64,19 @@ st.markdown(
     }
     html, body, [class*="css"], .stApp, .stMarkdown, button, input, textarea, select {
       font-family: "Pretendard", "Malgun Gothic", sans-serif !important;
+    }
+    /* 한글 음절 중간 줄바꿈 차단 (객관식·문제·본문 공통) */
+    .stApp p, .stApp li, .stApp label, .stApp span,
+    .stApp [data-testid="stMarkdownContainer"],
+    .stApp [data-testid="stMarkdownContainer"] *,
+    .stApp button, .stApp button *,
+    .stApp a, .stApp a *,
+    .qbox, .qbox *, .case-card, .case-card *, .brief, .brief *,
+    .ok, .bad, .svc, .svc *, .mast, .mast * {
+      word-break: keep-all !important;
+      line-break: strict !important;
+      overflow-wrap: break-word !important;
+      -webkit-line-break: after-white-space;
     }
     .stApp {
       background:
@@ -894,12 +934,12 @@ def show_review(history: list | None, deck: list[dict]) -> None:
             if item is None:
                 continue
             if item.get("ox"):
-                st.write(f"**{int(h['idx']) + 1}.** {item.get('ask') or '아래 설명이 맞으면 O, 틀리면 X.'}")
+                st.write(f"**{int(h['idx']) + 1}.** {glue_kr(item.get('ask') or '아래 설명이 맞으면 O, 틀리면 X.')}")
                 if item.get("ctx"):
-                    st.caption(item["ctx"])
-                st.write(item.get("q") or "")
+                    st.caption(glue_kr(item["ctx"]))
+                st.write(glue_kr(item.get("q") or ""))
             else:
-                st.write(f"**{int(h['idx']) + 1}.** {item['q']}")
+                st.write(f"**{int(h['idx']) + 1}.** {glue_kr(item['q'])}")
             pick_i = int(h["choice"])
             ans_i = int(h["answer"])
             if item.get("kind") == "num":
@@ -912,34 +952,38 @@ def show_review(history: list | None, deck: list[dict]) -> None:
                 mark_m = "시간 초과" if pick_i < 0 else f"{circle(pick_i)} {item['choices'][pick_i]}"
                 mark_a = f"{circle(ans_i)} {item['choices'][ans_i]}"
             st.markdown(
-                f"<div class='bad'>내 답 {html.escape(mark_m)}</div>",
+                f"<div class='bad'>내 답 {html.escape(glue_kr(mark_m))}</div>",
                 unsafe_allow_html=True,
             )
             st.markdown(
-                f"<div class='ok'>정답 {html.escape(mark_a)}</div>",
+                f"<div class='ok'>정답 {html.escape(glue_kr(mark_a))}</div>",
                 unsafe_allow_html=True,
             )
             if item.get("exp"):
-                st.caption(item["exp"])
+                st.caption(glue_kr(item["exp"]))
             if item.get("src"):
-                st.caption("출처: " + item["src"])
+                st.caption("출처: " + glue_kr(item["src"]))
 
 
 def render_question(item: dict, qn: int, total: int, double: bool = False) -> None:
     tag = "<span class='x2tag'>찬스 문제 · 점수 2배</span>" if double else ""
     if item.get("ox"):
-        ask = html.escape(item.get("ask") or "아래 설명이 맞으면 O, 틀리면 X.")
-        ctx = html.escape(item.get("ctx") or "").replace("\n", "<br>")
-        say = html.escape(item.get("q") or "").replace("\n", "<br>")
+        ask = html.escape(glue_kr(item.get("ask") or "아래 설명이 맞으면 O, 틀리면 X."))
+        ctx = html.escape(glue_kr(item.get("ctx") or "")).replace("\n", "<br>")
+        say = html.escape(glue_kr(item.get("q") or "")).replace("\n", "<br>")
         body = f"<p class='ox-ask'>{ask}</p>"
         if ctx:
             body += f"<p class='ox-ctx'>{ctx}</p>"
         body += f"<p class='ox-say'>{say}</p>"
     else:
-        body = f"<div class='stem'>{html.escape(item['q']).replace(chr(10), '<br>')}</div>"
+        body = (
+            f"<div class='stem'>"
+            f"{html.escape(glue_kr(item['q'])).replace(chr(10), '<br>')}"
+            f"</div>"
+        )
     st.markdown(
         f"<div class='qbox{' x2' if double else ''}'>"
-        f"<div class='meta'><span>{html.escape(item['area'])} · {qn}/{total}</span>{tag}</div>"
+        f"<div class='meta'><span>{html.escape(glue_kr(item['area']))} · {qn}/{total}</span>{tag}</div>"
         f"{body}</div>",
         unsafe_allow_html=True,
     )
@@ -952,13 +996,13 @@ def pick_choice(item: dict, key: str, selected: int | None = None) -> int | None
         for i, c in enumerate(item["choices"][:2]):
             with cols[i]:
                 kind = "primary" if selected is not None and i == selected else "secondary"
-                if st.button(c, key=f"{key}_{i}", type=kind):
+                if st.button(glue_kr(c), key=f"{key}_{i}", type=kind):
                     return i
         return None
     st.markdown("<div class='choice-mark'></div>", unsafe_allow_html=True)
     for i, c in enumerate(item["choices"]):
         kind = "primary" if selected is not None and i == selected else "secondary"
-        if st.button(f"{circle(i)} {c}", key=f"{key}_{i}", type=kind):
+        if st.button(f"{circle(i)} {glue_kr(c)}", key=f"{key}_{i}", type=kind):
             return i
     return None
 
@@ -1229,9 +1273,11 @@ def cases_screen() -> None:
     st.write(f"**{pick}** · 공식 {total}건 가운데 {len(rows)}건")
     open_id = st.session_state.get("case_open") or ""
     for row in rows:
-        name = html.escape(row.get("사건명") or "")
+        name = html.escape(glue_kr(row.get("사건명") or ""))
         meta = html.escape(
-            " · ".join(x for x in (row.get("사건번호") or "", row.get("선고일자") or "", row.get("법원명") or "") if x)
+            glue_kr(
+                " · ".join(x for x in (row.get("사건번호") or "", row.get("선고일자") or "", row.get("법원명") or "") if x)
+            )
         )
         st.markdown(
             f"<div class='case-card'><p class='case-meta'>{meta}</p>"
@@ -1286,17 +1332,19 @@ def laws_screen() -> None:
     st.write(f"**경찰청 소관** · 공식 {total}건 가운데 {len(rows)}건 · 공포일 최근순")
     open_id = st.session_state.get("law_open") or ""
     for row in rows:
-        name = html.escape(row.get("법령명") or "")
+        name = html.escape(glue_kr(row.get("법령명") or ""))
         bits = [row.get("제개정") or "", row.get("법령구분") or "", row.get("소관부처") or ""]
         meta = html.escape(
-            " · ".join(
-                x
-                for x in (
-                    "공포 " + (row.get("공포일자") or ""),
-                    "시행 " + (row.get("시행일자") or ""),
-                    " · ".join(b for b in bits if b),
+            glue_kr(
+                " · ".join(
+                    x
+                    for x in (
+                        "공포 " + (row.get("공포일자") or ""),
+                        "시행 " + (row.get("시행일자") or ""),
+                        " · ".join(b for b in bits if b),
+                    )
+                    if x and x not in ("공포 ", "시행 ")
                 )
-                if x and x not in ("공포 ", "시행 ")
             )
         )
         st.markdown(
