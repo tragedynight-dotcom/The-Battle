@@ -1,0 +1,19 @@
+[server]
+runOnSave = true
+fileWatcherType = "poll"
+port = 8502
+headless = true
+
+[browser]
+gatherUsageStats = false
+
+[client]
+toolbarMode = "minimal"
+
+[theme]
+base = "light"
+primaryColor = "#0a2348"
+backgroundColor = "#d6dde6"
+secondaryBackgroundColor = "#ffffff"
+textColor = "#122033"
+font = "sans serif"

@@ -1,0 +1,1914 @@
+from __future__ import annotations
+
+import html
+import random
+import time
+import uuid
+from datetime import datetime
+
+import streamlit as st
+
+from src.exam import RAND_EXAM, RAND_TOPIC, area_choices, circle, item_at, make_ox_quiz, make_quiz
+from src.org import TEAMS, agencies, agency_label, path_text, station_label, stations, units
+from src import rooms
+from src import sfx
+from src import precedent
+from src import standings
+
+APP_TITLE = "실무역량 평가 다통과 : The Battle"
+EXAM_TITLE = "실무역량평가(객관식)"
+EXAM_DESC = "객관식 문제로 개인전·단체전 등 여러 모드에서 겨룹니다."
+OX_DESC = "OX문제로 개인전·단체전 등 여러 모드에서 겨룹니다."
+
+st.set_page_config(page_title=APP_TITLE, page_icon="🛡️", layout="wide")
+st.markdown(
+    """
+    <style>
+    @import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css");
+    @import url("https://fonts.googleapis.com/css2?family=Sora:wght@600;700&display=swap");
+    :root {
+      --ink:#1c2430; --ink-2:#334155;
+      --accent:#e2553d; --accent-2:#f3a08f;
+      --navy:#3b4658; --navy-2:#526074;
+      --gold:var(--accent); --gold-2:var(--accent-2);
+      --bg:#eef1f5; --card:#ffffff; --line:#dde3ec; --muted:#667285;
+      --red:#b8332a; --blue:#1c5aa3; --ok:#12784a; --bad:#c0392b;
+      --sh:0 1px 2px rgba(28,36,48,.04), 0 6px 16px rgba(28,36,48,.05);
+    }
+    html, body, [class*="css"], .stApp, .stMarkdown, button, input, textarea, select {
+      font-family: "Pretendard", "Malgun Gothic", sans-serif !important;
+    }
+    .stApp {
+      background:
+        radial-gradient(800px 360px at 12% -8%, rgba(226,85,61,.07), transparent 55%),
+        radial-gradient(640px 320px at 96% 0%, rgba(82,96,116,.08), transparent 52%),
+        linear-gradient(180deg, #f7f8fb 0%, var(--bg) 45%, #e7ebf1 100%);}
+    section.main > div.block-container {
+      background:rgba(255,255,255,.78); border-radius:18px; max-width:980px;
+      padding:.55rem 1.05rem 1.8rem; margin-top:.2rem;
+      box-shadow:0 8px 24px rgba(28,36,48,.05); border:1px solid rgba(28,36,48,.05);
+      backdrop-filter:blur(6px);}
+    section.main {padding-top:0 !important;}
+    .stMainBlockContainer, div[data-testid="stMainBlockContainer"] {padding-top:.2rem !important;}
+    .block-container div[data-testid="stMarkdownContainer"]:has(.mast) {
+      margin:0 0 14px 0; width:100%;}
+    .block-container .mast,
+    .block-container .mast.slim {margin-bottom:0; border-radius:14px; box-shadow:none;}
+    div[data-testid="stColumn"] > div,
+    div[data-testid="stColumn"] > div > [data-testid="stLayoutWrapper"] {
+      height:100% !important; display:flex !important; flex-direction:column !important;}
+    div[data-testid="stColumn"] > div > [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"] {
+      background:var(--card) !important; border:1px solid var(--line) !important;
+      border-radius:14px !important; box-shadow:var(--sh) !important;
+      padding:16px 14px 14px !important; height:100% !important; flex:1 1 auto !important;
+      min-height:220px; box-sizing:border-box;
+      display:flex !important; flex-direction:column !important;}
+    div[data-testid="stColumn"] > div > [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"] > div {
+      flex:1 1 auto !important; display:flex !important; flex-direction:column !important;
+      background:transparent !important; min-height:0 !important;}
+    div[data-testid="stColumn"] [data-testid="stVerticalBlock"] .svc,
+    div[data-testid="stColumn"] [data-testid="stVerticalBlock"] .svc.lead {
+      border:none !important; box-shadow:none !important; background:transparent !important;
+      padding:0 !important; min-height:0 !important; margin:0 !important; flex:1 1 auto;}
+    div[data-testid="stColumn"] [data-testid="stVerticalBlock"] .svc h3 {
+      min-height:2.6em; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+      overflow:hidden;}
+    div[data-testid="stColumn"] [data-testid="stVerticalBlock"] .svc p {
+      margin-bottom:4px; min-height:2.9em; display:-webkit-box; -webkit-line-clamp:2;
+      -webkit-box-orient:vertical; overflow:hidden;}
+    div[data-testid="stColumn"] [data-testid="stVerticalBlock"] div.stButton,
+    div[data-testid="stColumn"] [data-testid="stVerticalBlock"] div.stLinkButton {
+      margin-top:auto !important; padding-top:14px;}
+    div[data-testid="stColumn"] [data-testid="stVerticalBlock"] [data-testid="stElementContainer"],
+    div[data-testid="stColumn"] [data-testid="stVerticalBlock"] [data-testid="stMarkdownContainer"],
+    div[data-testid="stColumn"] [data-testid="stVerticalBlock"] [data-testid="stMarkdown"] {
+      background:transparent !important;}
+    div[data-testid="stColumn"] [data-testid="stVerticalBlock"] [data-testid="stElementContainer"]:has(.svc) {
+      flex:1 1 auto !important;}
+    div[data-testid="stHorizontalBlock"] {
+      flex-direction:row !important; flex-wrap:nowrap !important;
+      gap:12px !important; align-items:stretch !important; margin-bottom:4px;}
+    div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
+      min-width:0 !important; display:flex !important; flex-direction:column;}
+    div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] > div {
+      flex:1; display:flex; flex-direction:column; width:100%; min-width:0;}
+    @media (max-width:640px) {
+      section.main > div.block-container {padding:.4rem .75rem 1.3rem; margin-top:.1rem; border-radius:14px;}
+      .block-container div[data-testid="stMarkdownContainer"]:has(.mast) {margin:0 0 12px 0; width:100%;}
+      .mast-body {padding:14px 14px 15px;}
+      .mast h1 {font-size:1.22rem;}
+      .mast p {font-size:.84rem; margin-top:6px;}
+      .mast .tags span {font-size:.68rem; padding:3px 8px;}
+      .sect {flex-wrap:wrap; gap:4px 8px; margin:14px 0 10px 0;}
+      .sect strong {font-size:.95rem;}
+      .sect span {font-size:.78rem;}
+      div[data-testid="stHorizontalBlock"] {gap:8px !important;}
+      div[data-testid="stColumn"] > div > [data-testid="stLayoutWrapper"] > [data-testid="stVerticalBlock"] {
+        padding:12px 10px 10px !important; border-radius:12px !important; min-height:200px;}
+      .svc {min-height:0; padding:0;}
+      .svc h3 {font-size:.92rem; margin-bottom:5px;}
+      .svc p {font-size:.78rem; line-height:1.45;}
+      .svc-no {font-size:.62rem; margin-bottom:6px;}
+      div[data-testid="stColumn"] [data-testid="stVerticalBlock"] div.stButton,
+      div[data-testid="stColumn"] [data-testid="stVerticalBlock"] div.stLinkButton {padding-top:10px;}
+      div[data-testid="stColumn"] [data-testid="stVerticalBlock"] button {font-size:.82rem !important; min-height:2.2rem;}
+    }
+    header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecoration"],
+    .stAppDeployButton, #MainMenu, footer {display:none !important;}
+    h1,h2,h3,h4 {word-break:keep-all; letter-spacing:-.02em;}
+
+    /* ── 상단 배너 (라이트) ─────────────────────── */
+    .mast {background:linear-gradient(180deg,#ffffff 0%,#f5f7fa 100%);
+      color:var(--ink); border-radius:14px; overflow:hidden; margin-bottom:18px; position:relative;
+      border:1px solid var(--line);}
+    .mast::after {content:""; position:absolute; inset:auto 0 0 0; height:2px;
+      background:linear-gradient(90deg,var(--accent),rgba(226,85,61,.15) 55%,transparent);}
+    .mast-body {padding:12px 16px 14px;}
+    .mast-meta {display:flex; align-items:center; justify-content:space-between; gap:10px;
+      margin-bottom:6px; font-size:.72rem; letter-spacing:.04em; color:var(--muted);}
+    .brand {display:flex; align-items:center; gap:8px;}
+    .brand-name {font-family:"Sora", "Pretendard", sans-serif !important; font-weight:700;
+      letter-spacing:.01em; color:var(--ink-2); word-break:keep-all; font-size:.78rem;}
+    .mark {width:10px; height:10px; display:inline-block; flex-shrink:0; border-radius:3px;
+      background:var(--accent);}
+    .mast h1 {margin:0; font-size:1.48rem; line-height:1.25; font-weight:780; color:var(--ink);}
+    .mast h1 .battle {font-family:"Sora", "Pretendard", sans-serif !important; font-weight:700;
+      color:var(--accent); margin-left:.15em;}
+    .mast p {margin:6px 0 0 0; color:var(--muted); line-height:1.55; max-width:38rem; font-size:.9rem; word-break:keep-all;}
+    .mast.slim {margin-bottom:12px;}
+    .mast.slim .mast-body {padding:10px 14px;}
+    .slim-title {color:var(--ink); font-weight:720; font-size:.92rem; margin-left:10px; padding-left:11px;
+      border-left:1px solid var(--line); letter-spacing:-.01em;}
+    .mast .tags {margin-top:9px; display:flex; flex-wrap:wrap; gap:6px;}
+    .block-container div[data-testid="stMarkdownContainer"]:has(.mast) {padding-top:0 !important;}
+    .block-container div[data-testid="stElementContainer"]:has(.mast) {margin-top:0 !important; padding-top:0 !important;}
+    .mast .tags span {font-size:.74rem; padding:4px 9px; border-radius:8px;
+      background:#eef2f7; border:1px solid #d8e0ea; color:#516074;}
+
+    .svc {background:var(--card); border:1px solid var(--line); border-radius:14px;
+      padding:18px 18px 15px; min-height:0; box-shadow:var(--sh);
+      transition:transform .14s ease, box-shadow .14s ease, border-color .14s ease;}
+    .svc:hover {transform:translateY(-2px); box-shadow:0 10px 22px rgba(28,36,48,.08); border-color:#c9d3e0;}
+    .svc.lead {border-color:#d5deea; background:linear-gradient(180deg,#fbfcfe,#fff);}
+    .svc-no {display:inline-flex; align-items:center; gap:7px; font-size:.7rem; letter-spacing:.15em;
+      color:var(--accent); font-weight:750; margin-bottom:9px;}
+    .svc-no::before {content:""; width:16px; height:2px; background:var(--accent); border-radius:2px;}
+    .svc h3 {margin:0 0 7px 0; font-size:1.13rem; color:var(--ink);}
+    .svc p {margin:0; color:#5d6778; font-size:.9rem; line-height:1.62; word-break:keep-all;}
+
+    .pill {display:inline-block; font-size:.78rem; font-weight:650; padding:4px 11px; border-radius:999px;
+      background:#eef2f7; color:var(--ink-2); border:1px solid #d8e0ea; margin:0 5px 5px 0;}
+    .pill.gold {background:#fce8e3; color:#a63d2c; border-color:#f0c4ba;}
+    .pill.red {background:#fbeceb; color:var(--red); border-color:#f0c9c6;}
+    .pill.blue {background:#e8f0fb; color:var(--blue); border-color:#c6d9f2;}
+    .sect {display:flex; align-items:baseline; gap:10px; margin:18px 0 12px 0;}
+    .sect strong {color:var(--ink); font-size:1.03rem; letter-spacing:-.01em;}
+    .sect span {color:var(--muted); font-size:.88rem;}
+
+    /* ── 게임 상황판(스티키) ───────────────────── */
+    div[data-testid="stElementContainer"]:has(> .stMarkdown .hud),
+    div[data-testid="element-container"]:has(> .stMarkdown .hud) {
+      position:sticky; top:0; z-index:40; background:var(--bg); padding:6px 0 4px;
+    }
+    .hud {background:var(--navy); border-radius:13px; padding:11px 15px 12px; color:#fff;
+      box-shadow:0 6px 16px rgba(59,70,88,.16);}
+    .hud-row {display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+    .hud .chip {font-size:.79rem; padding:4px 10px; border-radius:8px; background:rgba(255,255,255,.11);
+      border:1px solid rgba(255,255,255,.14); color:#cddcec; white-space:nowrap;}
+    .hud .chip b {color:#fff; font-weight:750; margin-left:4px;}
+    .hud .chip.gold {background:rgba(201,162,39,.22); border-color:rgba(232,208,145,.5); color:#f2e2b8;}
+    .hud .chip.hot {background:rgba(216,90,44,.26); border-color:rgba(240,150,110,.55); color:#ffd9c8;}
+    .hud .grow {flex:1;}
+    .prog {height:7px; border-radius:999px; background:rgba(255,255,255,.14); overflow:hidden; margin:0 0 10px 0;}
+    .prog i {display:block; height:100%; border-radius:999px;
+      background:linear-gradient(90deg,var(--gold),var(--gold-2)); transition:width .3s ease;}
+    .tmr {height:9px; border-radius:999px; background:rgba(255,255,255,.14); overflow:hidden; margin-top:10px;}
+    .tmr i {display:block; height:100%; border-radius:999px;
+      background:linear-gradient(90deg,#35b37e,#e2b53f 60%,#e05a4a); animation:drain linear forwards;}
+    @keyframes drain {from {width:var(--w);} to {width:0%;}}
+
+    /* ── 순위표 ────────────────────────────────── */
+    .rank {background:var(--card); border:1px solid var(--line); border-radius:14px; padding:8px 6px; box-shadow:var(--sh);}
+    .rank-row {display:flex; align-items:center; gap:11px; padding:9px 12px; border-radius:10px;}
+    .rank-row + .rank-row {border-top:1px solid #eef2f8;}
+    .rank-row.me {background:#f2f7ff;}
+    .rank-gap {text-align:center; color:#93a2b6; font-size:.78rem; letter-spacing:.28em;
+      padding:4px 0 2px; border-top:1px dashed #e2e8f0;}
+    .pos {width:26px; height:26px; border-radius:8px; display:grid; place-items:center; flex-shrink:0;
+      font-size:.82rem; font-weight:800; background:#eef2f8; color:#6b7a8d;}
+    .pos.p1 {background:linear-gradient(180deg,#f5d97a,#d4af37); color:#4a3906;}
+    .pos.p2 {background:linear-gradient(180deg,#e2e8ef,#b9c4d1); color:#41505f;}
+    .pos.p3 {background:linear-gradient(180deg,#e8c39c,#c08a55); color:#4b2f13;}
+    .who {min-width:0; flex:1;}
+    .who b {display:block; font-size:.96rem; color:var(--ink); font-weight:680;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+    .who small {color:var(--muted); font-size:.78rem;}
+    .who em {font-style:normal; font-size:.72rem; padding:1px 7px; border-radius:999px; margin-left:6px;}
+    .who em.red {background:#fbeceb; color:var(--red);}
+    .who em.blue {background:#e8f0fb; color:var(--blue);}
+    .rbar {width:120px; height:7px; border-radius:999px; background:#eaeff6; overflow:hidden; flex-shrink:0;}
+    .rbar i {display:block; height:100%; border-radius:999px; background:linear-gradient(90deg,var(--navy-2),#3f77c4);}
+    .val {width:78px; text-align:right; font-weight:750; color:var(--navy); font-size:.94rem; flex-shrink:0;}
+    .val small {display:block; font-weight:500; color:var(--muted); font-size:.72rem;}
+
+    /* ── 팀 대항 점수판 ────────────────────────── */
+    .teams {display:flex; align-items:stretch; gap:10px; margin:4px 0 6px;}
+    .team {flex:1; border-radius:14px; padding:14px 16px; color:#fff; box-shadow:var(--sh);}
+    .team.red {background:linear-gradient(135deg,#a82c24,#cf4b3e);}
+    .team.blue {background:linear-gradient(135deg,#17457f,#2f74c4);}
+    .team b {display:block; font-size:.9rem; opacity:.92; letter-spacing:.04em;}
+    .team strong {display:block; font-size:2rem; font-weight:800; line-height:1.2; margin-top:2px;}
+    .team span {font-size:.79rem; opacity:.85;}
+    .vs {display:grid; place-items:center; font-weight:800; color:#93a2b6; font-size:.9rem; padding:0 2px;}
+    .seat {border-radius:14px; padding:15px 18px; color:#fff; margin:8px 0 12px; box-shadow:var(--sh);}
+    .seat.red {background:linear-gradient(135deg,#a82c24,#cf4b3e);}
+    .seat.blue {background:linear-gradient(135deg,#17457f,#2f74c4);}
+    .seat.wait {background:#3a4658;}
+    .seat b {display:block; font-size:.8rem; letter-spacing:.05em; opacity:.9;}
+    .seat strong {display:block; font-size:1.55rem; font-weight:800; margin-top:3px; letter-spacing:-.02em;}
+    .seat span {display:block; margin-top:4px; font-size:.88rem; opacity:.9;}
+
+    /* ── 참가자 칩 ─────────────────────────────── */
+    .peers {display:flex; flex-wrap:wrap; gap:7px; margin:2px 0 4px;}
+    .peer {display:inline-flex; align-items:center; gap:6px; background:var(--card); border:1px solid var(--line);
+      border-radius:999px; padding:5px 12px; font-size:.88rem; color:var(--ink); box-shadow:0 1px 2px rgba(11,31,58,.05);}
+    .peer i {width:7px; height:7px; border-radius:50%; background:#37b26b; display:inline-block;}
+    .peer.red i {background:var(--red);} .peer.blue i {background:var(--blue);}
+    .peer.host::after {content:"방장"; font-size:.68rem; color:#8a6d1c; background:#fbf3dd;
+      border:1px solid #ecd9a3; border-radius:999px; padding:1px 6px;}
+
+    /* ── 문제 ─────────────────────────────────── */
+    .qbox {background:var(--card); border:1px solid var(--line); border-radius:14px;
+      padding:20px 22px; margin:12px 0 14px 0; line-height:1.78; word-break:keep-all;
+      overflow-wrap:break-word; font-size:1.06rem; color:var(--ink); box-shadow:var(--sh); position:relative;}
+    .qbox::before {content:""; position:absolute; left:0; top:16px; bottom:16px; width:4px;
+      border-radius:0 4px 4px 0; background:linear-gradient(180deg,var(--navy-2),var(--gold));}
+    .qbox.x2::before {background:linear-gradient(180deg,var(--gold),#e0743a);}
+    .qbox .meta {color:var(--muted); font-size:.83rem; margin-bottom:10px; letter-spacing:.02em;
+      display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+    .qbox .meta .x2tag {background:#fdf0dd; color:#9a5a12; border:1px solid #f0cf9d;
+      border-radius:999px; padding:2px 9px; font-weight:750;}
+    .qbox .stem {white-space:pre-wrap;}
+    .qbox .ox-ask {margin:0 0 10px; color:var(--muted); font-size:.9rem;}
+    .qbox .ox-ctx {margin:0 0 10px; color:#4d5b6e; font-size:.92rem; line-height:1.6;}
+    .qbox .ox-say {margin:0; background:#f4f7fb; border:1px solid #d9e1ed; border-radius:12px;
+      padding:14px 16px; font-size:1.12rem; font-weight:650; line-height:1.7;}
+    .codebox {font-size:3rem; font-weight:800; letter-spacing:.22em; color:var(--navy); margin:8px 0 10px;
+      background:var(--card); border:1px solid var(--line); border-radius:16px; padding:20px 16px 20px 26px;
+      text-align:center; box-shadow:var(--sh);}
+
+    /* ── 버튼 ─────────────────────────────────── */
+    /* 1.59는 버튼을 감싼 칸을 글자 폭에 맞춰 줄인다. 칸부터 늘려야 버튼이 늘어난다. */
+    div[data-testid="stElementContainer"]:has([data-testid="stButton"]),
+    div[data-testid="stElementContainer"]:has([data-testid="stFormSubmitButton"]) {width:100% !important;}
+    div[data-testid="stButton"], div[data-testid="stFormSubmitButton"] {width:100% !important;}
+    div.stButton > button, div.stFormSubmitButton > button {width:100% !important;}
+    div.stButton > button, div.stFormSubmitButton > button {
+      white-space:normal; height:auto !important; min-height:2.8rem;
+      line-height:1.55; word-break:keep-all; overflow-wrap:break-word; padding:.72rem 1.05rem;
+      border-radius:11px !important; border:1px solid var(--line) !important;
+      transition:transform .1s ease, box-shadow .12s ease, background .12s ease;}
+    /* 글자는 button > div > span > stMarkdownContainer > p 안에 있다. */
+    div.stButton > button [data-testid="stMarkdownContainer"] p,
+    div.stFormSubmitButton > button [data-testid="stMarkdownContainer"] p,
+    div.stLinkButton > a,
+    div.stLinkButton > a [data-testid="stMarkdownContainer"] p,
+    a[data-testid="stBaseLinkButton"],
+    a[data-testid="stBaseLinkButton"] p {
+      font-family: "Pretendard", "Malgun Gothic", sans-serif !important;
+      font-weight:650 !important; font-size:.95rem !important; line-height:1.45 !important;
+      letter-spacing:-.01em !important; margin:0;}
+    div.stButton > button[kind="primary"] [data-testid="stMarkdownContainer"] p,
+    div.stFormSubmitButton > button[kind="primary"] [data-testid="stMarkdownContainer"] p {
+      color:#fff !important;}
+    div.stButton > button[kind="secondary"] {background:var(--card); justify-content:flex-start !important;
+      color:var(--ink) !important;}
+    div.stButton > button[kind="secondary"] > div,
+    div.stButton > button[kind="secondary"] > div > span {width:100%; justify-content:flex-start !important;}
+    div.stButton > button[kind="secondary"] [data-testid="stMarkdownContainer"],
+    div.stButton > button[kind="secondary"] [data-testid="stMarkdownContainer"] p {
+      text-align:left !important; color:var(--ink) !important;}
+    div.stButton > button[kind="secondary"]:hover {border-color:var(--navy-2) !important; background:#f5f7fa;}
+    div.stButton > button[kind="primary"], div.stFormSubmitButton > button[kind="primary"],
+    div.stLinkButton > a[kind="primary"], a[data-testid="stBaseLinkButton"] {
+      justify-content:center; background:var(--navy) !important; color:#fff !important;
+      border-color:var(--navy) !important; box-shadow:0 2px 8px rgba(59,70,88,.14);
+      font-family: "Pretendard", "Malgun Gothic", sans-serif !important;
+      font-weight:650 !important; font-size:.95rem !important;}
+    div.stButton > button[kind="primary"]:hover, div.stFormSubmitButton > button[kind="primary"]:hover,
+    div.stLinkButton > a[kind="primary"]:hover, a[data-testid="stBaseLinkButton"]:hover {
+      background:var(--navy-2) !important; border-color:var(--navy-2) !important; transform:translateY(-1px);
+      color:#fff !important;}
+    div.stLinkButton > a {width:100% !important; border-radius:11px !important;
+      min-height:2.8rem; display:inline-flex !important; align-items:center; justify-content:center;
+      padding:.72rem 1.05rem !important; box-sizing:border-box;}
+    div.stButton > button:active {transform:translateY(0);}
+    /* 메뉴 카드 안 시작하기·열기 글씨 통일 (primary만 흰 글씨) */
+    div[data-testid="stColumn"] [data-testid="stVerticalBlock"] div.stButton > button[kind="primary"],
+    div[data-testid="stColumn"] [data-testid="stVerticalBlock"] div.stLinkButton > a[kind="primary"],
+    div[data-testid="stColumn"] [data-testid="stVerticalBlock"] a[data-testid="stBaseLinkButton"] {
+      font-family: "Pretendard", "Malgun Gothic", sans-serif !important;
+      font-weight:650 !important; font-size:.95rem !important; letter-spacing:-.01em !important;}
+    div[data-testid="stColumn"] [data-testid="stVerticalBlock"] div.stButton > button[kind="primary"] [data-testid="stMarkdownContainer"] p,
+    div[data-testid="stColumn"] [data-testid="stVerticalBlock"] div.stLinkButton > a[kind="primary"] [data-testid="stMarkdownContainer"] p,
+    div[data-testid="stColumn"] [data-testid="stVerticalBlock"] a[data-testid="stBaseLinkButton"] p {
+      font-family: "Pretendard", "Malgun Gothic", sans-serif !important;
+      font-weight:650 !important; font-size:.95rem !important; letter-spacing:-.01em !important;
+      color:#fff !important; text-align:center !important;}
+    div[data-testid="stColumn"] [data-testid="stVerticalBlock"] div.stButton > button[kind="secondary"] [data-testid="stMarkdownContainer"] p {
+      color:var(--ink) !important;}
+
+    /* 표시용 빈 div 바로 다음 줄에 오는 버튼을 골라 쓴다. */
+    div[data-testid="stElementContainer"]:has(.ox-mark) + div div.stButton > button {
+      min-height:4.6rem !important; justify-content:center !important;}
+    div[data-testid="stElementContainer"]:has(.ox-mark) + div div.stButton > button > div,
+    div[data-testid="stElementContainer"]:has(.ox-mark) + div div.stButton > button > div > span,
+    div[data-testid="stElementContainer"]:has(.case-actions-mark) + div div.stButton > button > div,
+    div[data-testid="stElementContainer"]:has(.case-actions-mark) + div div.stButton > button > div > span,
+    div[data-testid="stElementContainer"]:has(.mini-mark) + div div.stButton > button > div,
+    div[data-testid="stElementContainer"]:has(.mini-mark) + div div.stButton > button > div > span {
+      justify-content:center !important;}
+    div[data-testid="stElementContainer"]:has(.ox-mark) + div div.stButton > button
+      [data-testid="stMarkdownContainer"] p {
+      font-size:2.2rem !important; font-weight:800 !important; letter-spacing:.06em; text-align:center !important;}
+    div[data-testid="stElementContainer"]:has(.case-actions-mark) + div div.stButton > button,
+    div[data-testid="stElementContainer"]:has(.mini-mark) + div div.stButton > button {
+      min-height:2.2rem !important; padding:.32rem .9rem !important; justify-content:center !important;}
+    div[data-testid="stElementContainer"]:has(.case-actions-mark) + div div.stButton > button
+      [data-testid="stMarkdownContainer"] p,
+    div[data-testid="stElementContainer"]:has(.mini-mark) + div div.stButton > button
+      [data-testid="stMarkdownContainer"] p {
+      font-size:.87rem !important; text-align:center !important;}
+    /* 개정 이유·요지 보기 옆 원문 링크 세로 맞춤 */
+    div[data-testid="stElementContainer"]:has(.case-actions-mark) + div [data-testid="stHorizontalBlock"] {
+      align-items:center !important;}
+    div[data-testid="stElementContainer"]:has(.case-actions-mark) + div div.stLinkButton > a,
+    div[data-testid="stElementContainer"]:has(.case-actions-mark) + div a[data-testid="stBaseLinkButton"] {
+      min-height:2.2rem !important; padding:.32rem .9rem !important;
+      display:inline-flex !important; align-items:center; justify-content:center;
+      background:var(--card) !important; color:var(--ink-2) !important;
+      border:1px solid var(--line) !important; box-shadow:none !important;
+      font-size:.87rem !important; font-weight:650 !important;}
+    div[data-testid="stElementContainer"]:has(.case-actions-mark) + div [data-testid="stMarkdownContainer"] p {
+      margin:0 !important; display:flex; align-items:center; min-height:2.2rem;}
+    div[data-testid="stElementContainer"]:has(.case-actions-mark) + div [data-testid="stMarkdownContainer"] a {
+      line-height:1.3; font-weight:650;}
+
+    /* ── 결과·판례 ─────────────────────────────── */
+    .ok {background:#e9f7ef; border:1px solid #b3e0c6; border-left:4px solid var(--ok); border-radius:10px;
+      padding:11px 13px; word-break:keep-all; white-space:pre-wrap;}
+    .bad {background:#fdeeec; border:1px solid #f3c6c1; border-left:4px solid var(--bad); border-radius:10px;
+      padding:11px 13px; word-break:keep-all; white-space:pre-wrap;}
+    .case-card {background:var(--card); border:1px solid var(--line); border-radius:12px;
+      padding:14px 16px 12px; margin:10px 0 6px 0; box-shadow:var(--sh);}
+    .case-meta {margin:0; font-size:.88rem; color:var(--muted);}
+    .case-name {margin:7px 0 0 0; font-size:1.1rem; font-weight:680; line-height:1.55; color:var(--navy); word-break:keep-all;}
+    .brief {background:var(--card); border:1px solid var(--line); border-left:4px solid var(--gold);
+      border-radius:12px; padding:12px 16px; margin:7px 0; box-shadow:var(--sh);}
+    .brief p {margin:0; font-size:.83rem; color:var(--muted);}
+    .brief b {display:block; margin-top:3px; font-size:1rem; color:var(--navy); font-weight:680; word-break:keep-all;}
+
+    /* ── 접는 칸·알림 ──────────────────────────── */
+    div[data-testid="stExpander"] {border:1px solid var(--line) !important; border-radius:12px !important;
+      background:var(--card); box-shadow:var(--sh); overflow:hidden;}
+    div[data-testid="stExpander"] summary {font-weight:650; color:var(--navy);}
+    div[data-testid="stAlertContainer"] {border-radius:12px;}
+
+    /* ── 입력 ─────────────────────────────────── */
+    div[data-testid="stForm"] {border:1px solid var(--line); background:var(--card); border-radius:14px;
+      padding:8px 18px 14px; max-width:460px; box-shadow:var(--sh);}
+    [data-testid="stTextInput"] input, [data-baseweb="input"] input,
+    input[type="password"], input[type="text"] {
+      direction:ltr !important; text-align:left !important; unicode-bidi:isolate !important;}
+    [data-testid="stTextInput"] [data-baseweb="base-input"],
+    [data-testid="stTextInput"] [data-baseweb="input"] {direction:ltr !important; flex-direction:row !important;}
+
+    /* ── 연속 정답 이펙트(직접 그린 CSS, 상용 이미지 없음) ── */
+    .fx-layer {position:fixed; inset:0; pointer-events:none; z-index:90; overflow:hidden;}
+    .fx-flash {position:absolute; inset:0; background:radial-gradient(ellipse at 50% 32%,
+      rgba(232,208,145,.34), transparent 58%); animation:fxFlash 1.05s ease-out forwards;}
+    .fx-flash.miss {background:radial-gradient(ellipse at 50% 32%,
+      rgba(192,57,43,.16), transparent 58%);}
+    .fx-pop {position:absolute; left:50%; top:26%; transform:translate(-50%,-50%);
+      text-align:center; animation:fxPop 1.2s ease-out forwards;}
+    .fx-pop b {display:block; font-size:2.35rem; font-weight:800; color:#fff;
+      letter-spacing:-.03em; text-shadow:0 6px 22px rgba(11,31,58,.38);}
+    .fx-pop.hot b {font-size:2.75rem; color:#ffe7a3;}
+    .fx-pop.big b {font-size:3.1rem; color:#fff3c4;}
+    .fx-pop span {display:block; margin-top:5px; color:#f2e2b8; font-weight:680; font-size:1.02rem;}
+    .fx-pop.miss b {color:#f3d0cc; font-size:1.7rem;}
+    .fx-ring {position:absolute; left:50%; top:26%; width:28px; height:28px; border-radius:50%;
+      border:3px solid rgba(201,162,39,.9); transform:translate(-50%,-50%);
+      animation:fxRing 1s ease-out forwards;}
+    .fx-ring.r2 {animation-delay:.08s; border-color:rgba(255,255,255,.45);}
+    .fx-spark {position:absolute; left:50%; top:26%; width:8px; height:8px; margin:-4px 0 0 -4px;
+      border-radius:50%; background:#e8d091; box-shadow:0 0 8px rgba(232,208,145,.8);
+      animation:fxSpark .95s ease-out forwards;}
+    @keyframes fxFlash {0%{opacity:.95;} 100%{opacity:0;}}
+    @keyframes fxPop {0%{opacity:0; transform:translate(-50%,-38%) scale(.62);}
+      16%{opacity:1; transform:translate(-50%,-50%) scale(1.08);}
+      68%{opacity:1;} 100%{opacity:0; transform:translate(-50%,-62%) scale(1);}}
+    @keyframes fxRing {0%{opacity:.95; width:22px; height:22px;} 100%{opacity:0; width:240px; height:240px;}}
+    @keyframes fxSpark {0%{opacity:1; transform:translate(0,0) scale(1);}
+      100%{opacity:0; transform:translate(var(--dx), var(--dy)) scale(.15);}}
+    .hud .chip.hot {animation:hotPulse .55s ease;}
+    @keyframes hotPulse {0%{transform:scale(1);} 40%{transform:scale(1.14);} 100%{transform:scale(1);}}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+GATE_PASSWORD = "12345678"
+RANK_RESET_PASSWORDS = frozenset({"rlawhdtjs1^", "whdtjs12^"})
+
+
+def _in_flag() -> bool:
+    return st.query_params.get("in") == "1"
+
+
+def _mark_in() -> None:
+    st.query_params["in"] = "1"
+
+
+def _drop_room() -> None:
+    """방 번호만 지운다. 출입 상태는 남긴다."""
+    if _in_flag() or st.session_state.get("unlocked"):
+        st.query_params.clear()
+        st.query_params["in"] = "1"
+    else:
+        st.query_params.clear()
+
+
+if "pid" not in st.session_state:
+    st.session_state.pid = uuid.uuid4().hex[:10]
+if "phase" not in st.session_state:
+    st.session_state.phase = "hub"
+if "unlocked" not in st.session_state:
+    st.session_state.unlocked = _in_flag()
+elif _in_flag():
+    st.session_state.unlocked = True
+
+
+def _mast(sub: str, title: str = APP_TITLE, tags: list[str] | None = None) -> None:
+    chips = "".join(f"<span>{html.escape(t)}</span>" for t in (tags or []))
+    tagbox = f"<div class='tags'>{chips}</div>" if chips else ""
+    if title == APP_TITLE:
+        head = '실무역량 평가 다통과 <span class="battle">: The Battle</span>'
+    else:
+        head = html.escape(title)
+    st.markdown(
+        f"""
+        <div class="mast">
+          <div class="mast-body">
+            <div class="mast-meta">
+              <span class="brand"><span class="mark"></span><span class="brand-name">The Battle</span></span>
+            </div>
+            <h1>{head}</h1>
+            <p>{html.escape(sub)}</p>
+            {tagbox}
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _render_header(phase: str) -> None:
+    if phase == "hub":
+        _mast(
+            "지역경찰 상시교육 활성화와 팀워크 향상 및 현장 역량 강화를 위한 웹앱",
+            tags=["방 번호 4자리로 합류", "개인전", "단체전", "서바이벌", "전국 지역관서별 대결 가능"],
+        )
+    elif phase == "cases":
+        _mast("법원이 경찰 전용으로 나눠 주지 않습니다. 현장 법령·쟁점으로 법제처 공식 판례만 가져옵니다.", "최신판례")
+    elif phase == "laws":
+        _mast("소관부처가 경찰청인 법령만 가져옵니다. 형소법처럼 다른 부처 소관은 여기 없습니다.", "법률개정")
+    elif phase in ("lobby", "play"):
+        _mast_slim("실무역량평가 OX" if st.session_state.get("quiz_kind") == "ox" else EXAM_TITLE)
+    elif st.session_state.get("quiz_kind") == "ox":
+        _mast("공식 보기 한 줄이 맞는지 O/X로 풉니다. 몇 개를 묻는 문제는 숫자를 넣습니다.", "실무역량평가 OX")
+    else:
+        _mast("방장이 주제와 방식을 정하고, 들어온 사람을 확인한 뒤 시작합니다.", APP_TITLE)
+
+
+def _mast_slim(title: str, right: str = "") -> None:
+    right_html = f"<span>{html.escape(right)}</span>" if right else ""
+    st.markdown(
+        f"""
+        <div class="mast slim">
+          <div class="mast-body">
+            <div class="mast-meta">
+              <span class="brand">
+                <span class="mark"></span>
+                <span class="brand-name">The Battle</span>
+                <span class="slim-title">{html.escape(title)}</span>
+              </span>
+              {right_html}
+            </div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _svc_card(title: str, body: str, no: str, lead: bool = False) -> None:
+    cls = "svc lead" if lead else "svc"
+    st.markdown(
+        f"<div class='{cls}'><span class='svc-no'>{html.escape(no)}</span>"
+        f"<h3>{html.escape(title)}</h3><p>{html.escape(body)}</p></div>",
+        unsafe_allow_html=True,
+    )
+
+
+def _sect(title: str, note: str = "") -> None:
+    st.markdown(
+        f"<div class='sect'><strong>{html.escape(title)}</strong><span>{html.escape(note)}</span></div>",
+        unsafe_allow_html=True,
+    )
+
+
+SIDE_CLASS = {"홍팀": "red", "청팀": "blue"}
+
+
+def gate_screen() -> None:
+    _mast(
+        "지역경찰 상시교육 활성화와 팀워크 향상 및 현장 역량 강화를 위한 웹앱",
+        tags=["실무역량평가 문제은행", "개인전 · 단체전", "스피드전 · 서바이벌", "법제처 공식 판례 · 개정"],
+    )
+    g1, g2 = st.columns(2, gap="medium")
+    with g1:
+        _svc_card(EXAM_TITLE, EXAM_DESC, "01")
+    with g2:
+        _svc_card("실무역량평가 OX", OX_DESC, "02")
+    g3, g4 = st.columns(2, gap="medium")
+    with g3:
+        _svc_card("최신판례", "음주운전·폭행·가정폭력 등 현장 쟁점으로 법제처 공식 판례만 제공", "03")
+    with g4:
+        _svc_card("법률개정", "경찰청 소관 법령의 공포·시행·제개정만 제공", "04")
+    _sect("내부 출입", "비밀번호를 넣으십시오.")
+    with st.form("gate_form", clear_on_submit=False):
+        pw = st.text_input("비밀번호", placeholder="비밀번호")
+        submitted = st.form_submit_button("출입", type="primary")
+    if submitted:
+        if (pw or "").strip() == GATE_PASSWORD:
+            st.session_state.unlocked = True
+            st.session_state.phase = "hub"
+            _mark_in()
+            st.rerun()
+        else:
+            st.error("비밀번호가 맞지 않습니다.")
+    st.caption("외부 반출 금지. 내부 연습용입니다.")
+
+
+if not st.session_state.unlocked:
+    gate_screen()
+    st.stop()
+
+if st.session_state.phase == "hub" and st.query_params.get("room"):
+    st.session_state.phase = "enter"
+
+choices = area_choices()
+labels = [c[1] for c in choices]
+by_label = {c[1]: c for c in choices}
+
+
+def current_item(deck: list[dict], idx: int) -> dict | None:
+    if idx < 0 or idx >= len(deck):
+        return None
+    ref = deck[idx]
+    if ref.get("q") and ref.get("choices") is not None:
+        return ref
+    return item_at(ref["area_id"], ref["i"])
+
+
+def show_standings_board(
+    kind: str,
+    mode: str,
+    viewer: tuple[str, str] | None = None,
+    title: str = "랭킹",
+) -> None:
+    rows = standings.board(kind=kind, mode=mode, limit=10, viewer=viewer)
+    if not rows:
+        st.caption("이 종목·방식으로 끝난 판이 아직 없습니다. 한 판이 끝나면 여기에 쌓입니다.")
+        return
+    top = max(int(r.get("points") or 0) for r in rows) or 1
+    out = []
+    prev = 0
+    for r in rows:
+        rank = int(r.get("rank") or 0)
+        if prev and rank > prev + 1:
+            out.append("<div class='rank-gap'>···</div>")
+        cls = "rank-row me" if r.get("self") else "rank-row"
+        pos = f"pos p{rank}" if rank <= 3 else "pos"
+        out.append(
+            f"<div class='{cls}'><span class='{pos}'>{rank}</span>"
+            f"<span class='who'><b>{html.escape(r.get('name') or '')}</b>"
+            f"<small>{html.escape(r.get('org') or '')} · {int(r.get('games') or 0)}판 · 1등 {int(r.get('wins') or 0)}회</small></span>"
+            f"<span class='rbar'><i style='width:{max(2, min(100, int(100 * int(r.get('points') or 0) / top)))}%'></i></span>"
+            f"<span class='val'>{int(r.get('points') or 0)}점<small>{int(r.get('score') or 0)}개</small></span></div>"
+        )
+        prev = rank
+    if title:
+        note = "10위까지 공개합니다."
+        if viewer and any(int(r.get("rank") or 0) > 10 for r in rows):
+            note = "10위까지 공개하고, 지금 푼 사람의 자리만 아래에 붙입니다. 다시 들어오면 10위만 보입니다."
+        _sect(title, note)
+    st.markdown("<div class='rank'>" + "".join(out) + "</div>", unsafe_allow_html=True)
+
+
+def show_teams(room: dict) -> None:
+    if not room.get("team_battle"):
+        return
+    rows = rooms.team_ranking(room)
+    if not rows:
+        return
+    speed = rooms.mode_of(room) == "speed"
+    surv = rooms.mode_of(room) == "survival"
+    order = {r["side"]: r for r in rows}
+    cells = []
+    for side in rooms.SIDES:
+        r = order.get(side) or {"side": side, "n": 0, "score": 0, "points": 0, "alive": 0}
+        big = r["points"] if speed else r["score"]
+        unit = "점" if speed else "개"
+        sub = f"{r['n']}명 · 생존 {r['alive']}명" if surv else f"{r['n']}명"
+        cells.append(
+            f"<div class='team {SIDE_CLASS[side]}'><b>{side}</b>"
+            f"<strong>{big}<span style='font-size:1rem'> {unit}</span></strong><span>{sub}</span></div>"
+        )
+    st.markdown("<div class='teams'>" + cells[0] + "<div class='vs'>VS</div>" + cells[1] + "</div>", unsafe_allow_html=True)
+
+
+def _fmt_ms(ms: int) -> str:
+    if int(ms or 0) <= 0:
+        return ""
+    s = int(ms) / 1000
+    if s < 60:
+        return f"{s:.1f}초"
+    return f"{int(s) // 60}분 {int(s) % 60}초"
+
+
+def show_ranking(room: dict, pid: str, title: str = "실시간 순위") -> None:
+    total = len(room.get("deck") or []) or 1
+    mode = rooms.mode_of(room)
+    rows = rooms.ranking(room)
+    top = max([r["points"] for r in rows] or [0]) or 1
+    _sect(title, f"{len(rows)}명 · {rooms.MODES[mode][0]}")
+    show_teams(room)
+    out = []
+    for i, r in enumerate(rows, 1):
+        cls = "rank-row me" if r["pid"] == pid else "rank-row"
+        pos = f"pos p{i}" if i <= 3 else "pos"
+        side = f"<em class='{SIDE_CLASS[r['side']]}'>{r['side'][0]}</em>" if r["side"] in SIDE_CLASS else ""
+        if mode == "survival" and r["out"]:
+            state = f"탈락 · {r['idx']}번에서 멈춤"
+        elif rooms.relay_on(room):
+            asked = int(((room.get("relay") or {}).get("asked") or {}).get(r["pid"], 0))
+            now_pid = ((room.get("relay") or {}).get("pid") or "")
+            if r["pid"] == now_pid:
+                state = "지금 차례"
+            elif r["done"]:
+                state = "완료"
+            else:
+                state = f"{asked}문제 담당 · 대기"
+        elif r["done"]:
+            state = "완료"
+        else:
+            state = f"{min(r['idx'] + 1, total)}번 푸는 중"
+        if r["best"] >= 3:
+            state += f" · 최고 {r['best']}연속"
+        clock = _fmt_ms(int(r.get("ms") or 0))
+        if clock:
+            state += f" · {clock}"
+        if mode == "speed":
+            big, small = f"{r['points']}점", f"{r['score']}/{total}개"
+            width = int(100 * r["points"] / top)
+        else:
+            big, small = f"{r['score']}/{total}", f"{r['points']}점"
+            width = int(100 * r["score"] / total)
+        out.append(
+            f"<div class='{cls}'><span class='{pos}'>{i}</span>"
+            f"<span class='who'><b>{html.escape(r['name'])}{side}</b><small>{html.escape(state)}</small></span>"
+            f"<span class='rbar'><i style='width:{max(2, min(100, width))}%'></i></span>"
+            f"<span class='val'>{big}<small>{small}</small></span></div>"
+        )
+    st.markdown("<div class='rank'>" + "".join(out) + "</div>", unsafe_allow_html=True)
+
+
+def show_review(history: list | None, deck: list[dict]) -> None:
+    wrong = [h for h in (history or []) if not h.get("ok")]
+    with st.expander(f"결과보기 · 틀린 문제 {len(wrong)}개", expanded=False):
+        if not wrong:
+            st.write("틀린 문제가 없습니다.")
+            return
+        for h in wrong:
+            item = current_item(deck, int(h["idx"]))
+            if item is None:
+                continue
+            if item.get("ox"):
+                st.write(f"**{int(h['idx']) + 1}.** {item.get('ask') or '아래 설명이 맞으면 O, 틀리면 X.'}")
+                if item.get("ctx"):
+                    st.caption(item["ctx"])
+                st.write(item.get("q") or "")
+            else:
+                st.write(f"**{int(h['idx']) + 1}.** {item['q']}")
+            pick_i = int(h["choice"])
+            ans_i = int(h["answer"])
+            if item.get("kind") == "num":
+                mark_m = "시간 초과" if pick_i < 0 else str(pick_i)
+                mark_a = str(ans_i)
+            elif item.get("ox"):
+                mark_m = "시간 초과" if pick_i < 0 else item["choices"][pick_i]
+                mark_a = item["choices"][ans_i]
+            else:
+                mark_m = "시간 초과" if pick_i < 0 else f"{circle(pick_i)} {item['choices'][pick_i]}"
+                mark_a = f"{circle(ans_i)} {item['choices'][ans_i]}"
+            st.markdown(
+                f"<div class='bad'>내 답 {html.escape(mark_m)}</div>",
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                f"<div class='ok'>정답 {html.escape(mark_a)}</div>",
+                unsafe_allow_html=True,
+            )
+            if item.get("exp"):
+                st.caption(item["exp"])
+            if item.get("src"):
+                st.caption("출처: " + item["src"])
+
+
+def render_question(item: dict, qn: int, total: int, double: bool = False) -> None:
+    tag = "<span class='x2tag'>찬스 문제 · 점수 2배</span>" if double else ""
+    if item.get("ox"):
+        ask = html.escape(item.get("ask") or "아래 설명이 맞으면 O, 틀리면 X.")
+        ctx = html.escape(item.get("ctx") or "").replace("\n", "<br>")
+        say = html.escape(item.get("q") or "").replace("\n", "<br>")
+        body = f"<p class='ox-ask'>{ask}</p>"
+        if ctx:
+            body += f"<p class='ox-ctx'>{ctx}</p>"
+        body += f"<p class='ox-say'>{say}</p>"
+    else:
+        body = f"<div class='stem'>{html.escape(item['q']).replace(chr(10), '<br>')}</div>"
+    st.markdown(
+        f"<div class='qbox{' x2' if double else ''}'>"
+        f"<div class='meta'><span>{html.escape(item['area'])} · {qn}/{total}</span>{tag}</div>"
+        f"{body}</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def pick_choice(item: dict, key: str, selected: int | None = None) -> int | None:
+    if item.get("ox"):
+        st.markdown("<div class='ox-mark'></div>", unsafe_allow_html=True)
+        cols = st.columns(2, gap="medium")
+        for i, c in enumerate(item["choices"][:2]):
+            with cols[i]:
+                kind = "primary" if selected is not None and i == selected else "secondary"
+                if st.button(c, key=f"{key}_{i}", type=kind):
+                    return i
+        return None
+    for i, c in enumerate(item["choices"]):
+        kind = "primary" if selected is not None and i == selected else "secondary"
+        if st.button(f"{circle(i)} {c}", key=f"{key}_{i}", type=kind):
+            return i
+    return None
+
+
+def pick_org() -> dict:
+    cheongs = agencies()
+    if not cheongs:
+        st.error("관서 목록을 읽지 못했습니다.")
+        return {}
+    agency = st.selectbox(
+        "시도청",
+        ["", *cheongs],
+        format_func=lambda x: "시도청을 고르십시오" if not x else agency_label(x),
+        key="org_agency",
+    )
+    if not agency:
+        return {"agency": "", "station": "", "unit": "", "team": ""}
+    st_list = stations(agency)
+    if not st_list:
+        st.warning("이 청에 경찰서가 없습니다.")
+        return {"agency": agency, "station": "", "unit": "", "team": ""}
+    station = st.selectbox(
+        "경찰서",
+        ["", *st_list],
+        format_func=lambda x: "경찰서를 고르십시오" if not x else station_label(x),
+        key=f"org_station_{agency}",
+    )
+    if not station:
+        return {"agency": agency, "station": "", "unit": "", "team": ""}
+    unit_list = units(agency, station)
+    if not unit_list:
+        st.warning("이 서에 지구대·파출소가 없습니다.")
+        return {"agency": agency, "station": station, "unit": "", "team": ""}
+    unit = st.selectbox(
+        "지구대·파출소",
+        ["", *unit_list],
+        format_func=lambda x: "지구대·파출소를 고르십시오" if not x else x,
+        key=f"org_unit_{agency}_{station}",
+    )
+    if not unit:
+        return {"agency": agency, "station": station, "unit": "", "team": ""}
+    team_pick = st.selectbox("팀", ["", *TEAMS], format_func=lambda x: "팀을 고르십시오" if not x else x, key="org_team")
+    if not team_pick:
+        return {"agency": agency, "station": station, "unit": unit, "team": ""}
+    if team_pick == "기타":
+        team = st.text_input("팀 이름", value=st.session_state.get("team_custom") or "").strip()
+        st.session_state.team_custom = team
+    else:
+        team = team_pick
+    return {"agency": agency, "station": station, "unit": unit, "team": team}
+
+
+def _go_room(room: dict) -> None:
+    st.session_state.code = room["code"]
+    st.session_state.phase = "lobby" if room.get("status") == "lobby" else "play"
+    deck0 = (room.get("deck") or [{}])[0]
+    if room.get("kind") == "ox" or deck0.get("ox") or deck0.get("kind") == "num":
+        st.session_state.quiz_kind = "ox"
+    st.query_params["room"] = room["code"]
+    st.rerun()
+
+
+def _law_oc() -> str:
+    try:
+        return str(st.secrets.get("law_oc") or "").strip()
+    except Exception:
+        return ""
+
+
+def hub_screen() -> None:
+    _sect("VS 모드", "팀원 1명이 방을 만들고, 나머지 팀원은 방 번호로 들어갑니다.")
+    r1a, r1b = st.columns(2, gap="medium")
+    with r1a:
+        with st.container(border=True):
+            _svc_card(EXAM_TITLE, EXAM_DESC, "01")
+            if st.button("시작하기", type="primary", key="hub_exam", use_container_width=True):
+                st.session_state.quiz_kind = "exam"
+                st.session_state.phase = "enter"
+                st.rerun()
+    with r1b:
+        with st.container(border=True):
+            _svc_card("실무역량평가 OX", OX_DESC, "02")
+            if st.button("시작하기", type="primary", key="hub_ox", use_container_width=True):
+                st.session_state.quiz_kind = "ox"
+                st.session_state.phase = "enter"
+                st.rerun()
+    _sect("학습하기", "개인 학습·모의고사로 바로 이어집니다.")
+    r_learn_a, r_learn_b = st.columns(2, gap="medium")
+    with r_learn_a:
+        with st.container(border=True):
+            _svc_card(
+                "폴러닝(경찰청 지역경찰역량강화과 제작)",
+                "지역경찰 현장실무기초 14종, 법령·문제은행 등 학습",
+                "03",
+            )
+            st.link_button("폴러닝 열기", "https://pol-learning.web.app", type="primary", use_container_width=True)
+    with r_learn_b:
+        with st.container(border=True):
+            _svc_card(
+                "실무역량평가 다통과(실전 모의고사)",
+                "실무역량평가 대비 실전 모의고사로 최종 점검",
+                "04",
+            )
+            st.link_button(
+                "모의고사 열기",
+                "https://tragedynight-dotcom.github.io/Police_Exam/",
+                type="primary",
+                use_container_width=True,
+            )
+    _sect("최신판례 및 법률 개정 확인하기")
+    r2a, r2b = st.columns(2, gap="medium")
+    with r2a:
+        with st.container(border=True):
+            _svc_card(
+                "최신판례",
+                "음주운전·폭행·가정폭력 등 현장 쟁점으로 법제처 공식 판례만 제공",
+                "05",
+            )
+            if st.button("최신판례 열기", type="primary", key="hub_case", use_container_width=True):
+                st.session_state.phase = "cases"
+                st.rerun()
+    with r2b:
+        with st.container(border=True):
+            _svc_card(
+                "법률개정",
+                "경찰청 소관 법령의 공포·시행·제개정만 제공",
+                "06",
+            )
+            if st.button("법률개정 열기", type="primary", key="hub_law", use_container_width=True):
+                st.session_state.phase = "laws"
+                st.rerun()
+    st.caption("최신판례·법률개정은 법제처 원문 그대로 공식 자료만 제공")
+    _sect("랭킹", "종목과 방식을 나눠 봅니다. 10위까지 공개합니다.")
+    rk1, rk2 = st.columns(2)
+    with rk1:
+        rank_kind = st.radio(
+            "종목",
+            ["exam", "ox"],
+            format_func=lambda x: EXAM_TITLE if x == "exam" else "OX",
+            horizontal=True,
+            key="rank_kind",
+        )
+    with rk2:
+        rank_mode = st.radio(
+            "방식",
+            list(rooms.MODES),
+            format_func=lambda m: rooms.MODES[m][0],
+            horizontal=True,
+            key="rank_mode",
+        )
+    show_standings_board(rank_kind, rank_mode, title="")
+    recent = standings.recent(6, kind=rank_kind, mode=rank_mode)
+    if recent:
+        st.caption(
+            "최근 판 · "
+            + " · ".join(
+                f"{(m.get('at') or '')[5:16]} {m.get('top') or ''} ({m.get('n') or 0}명)"
+                for m in recent
+            )
+        )
+    with st.expander("랭킹 초기화", expanded=False):
+        st.caption("관리자만 사용합니다. 비밀번호가 맞아야 누적 랭킹이 모두 지워집니다.")
+        with st.form("rank_reset_form", clear_on_submit=True):
+            reset_pw = st.text_input("초기화 비밀번호", type="password", placeholder="비밀번호")
+            reset_go = st.form_submit_button("랭킹 초기화", type="primary")
+        if reset_go:
+            if (reset_pw or "") in RANK_RESET_PASSWORDS:
+                standings.clear()
+                st.success("랭킹을 초기화했습니다.")
+                st.rerun()
+            else:
+                st.error("비밀번호가 맞지 않습니다.")
+
+
+def cases_screen() -> None:
+    back, _ = st.columns([1, 3])
+    with back:
+        if st.button("← 홈으로", key="cases_back_hub"):
+            st.session_state.phase = "hub"
+            st.rerun()
+            return
+    st.caption("출처: 법제처 국가법령정보 공동활용. 직무·교통·형사·보호 쟁점으로 대법원 공식 판례만 가져옵니다.")
+    labels = [t[0] for t in precedent.FIELD_TOPICS]
+    pick = st.selectbox("쟁점", labels, key="case_topic")
+    jo = ""
+    query = ""
+    for name, spec in precedent.FIELD_TOPICS:
+        if name == pick:
+            jo = spec.get("jo") or ""
+            query = spec.get("query") or ""
+            break
+    if st.session_state.get("case_topic_prev") != pick:
+        st.session_state.case_open = ""
+        st.session_state.case_topic_prev = pick
+    criminal_only = st.checkbox("형사만 보기", value=True, key="case_criminal", help="국가배상 등 민사는 끄면 같이 나옵니다.")
+    oc = _law_oc()
+    if not oc:
+        st.error("법제처 인증값이 없습니다.")
+        return
+
+    try:
+        rows, total = _cached_prec(oc, jo, query)
+    except Exception:
+        st.error("법제처에서 읽지 못했습니다. 잠시 뒤 다시 하십시오.")
+        return
+    if criminal_only:
+        rows = [r for r in rows if r.get("사건종류명") == "형사"]
+    if not rows:
+        st.warning("이 쟁점으로 가져온 공식 판례가 없습니다.")
+        return
+    st.write(f"**{pick}** · 공식 {total}건 가운데 {len(rows)}건")
+    open_id = st.session_state.get("case_open") or ""
+    for row in rows:
+        name = html.escape(row.get("사건명") or "")
+        meta = html.escape(
+            " · ".join(x for x in (row.get("사건번호") or "", row.get("선고일자") or "", row.get("법원명") or "") if x)
+        )
+        st.markdown(
+            f"<div class='case-card'><p class='case-meta'>{meta}</p>"
+            f"<p class='case-name'>{name}</p></div>",
+            unsafe_allow_html=True,
+        )
+        rid = row.get("id") or ""
+        st.markdown('<div class="case-actions-mark"></div>', unsafe_allow_html=True)
+        b1, b2, _ = st.columns([1.05, 1.4, 3.55])
+        with b1:
+            if st.button("요지 보기", key=f"case_open_{rid}"):
+                st.session_state.case_open = rid
+                st.rerun()
+        with b2:
+            st.link_button(
+                "법령정보센터 원문",
+                precedent.official_link(rid, row.get("사건번호") or ""),
+                use_container_width=True,
+            )
+        if open_id and rid and open_id == rid:
+            detail = _cached_detail(oc, rid)
+            if not detail:
+                st.warning("요지를 읽지 못했습니다. 원문을 여십시오.")
+            else:
+                if detail.get("판시사항"):
+                    st.write("**판시사항**")
+                    st.write(detail["판시사항"][:1800])
+                if detail.get("판결요지"):
+                    st.write("**판결요지**")
+                    st.write(detail["판결요지"][:1800])
+                if detail.get("참조조문"):
+                    st.caption("참조조문: " + detail["참조조문"][:400])
+
+
+def laws_screen() -> None:
+    back, _ = st.columns([1, 3])
+    with back:
+        if st.button("← 홈으로", key="laws_back_hub"):
+            st.session_state.phase = "hub"
+            st.rerun()
+            return
+    st.caption("출처: 법제처. 소관부처 코드 경찰청(1320000)만 조회합니다. 개정 이유는 공식 제개정이유만 보여 줍니다.")
+    hide_org = st.checkbox("직제는 빼기", value=True, key="law_hide_org")
+    oc = _law_oc()
+    if not oc:
+        st.error("법제처 인증값이 없습니다.")
+        return
+    try:
+        rows, total = _cached_laws(oc)
+    except Exception:
+        st.error("법제처에서 읽지 못했습니다. 잠시 뒤 다시 하십시오.")
+        return
+    if hide_org:
+        rows = [r for r in rows if "직제" not in (r.get("법령명") or "")]
+    if not rows:
+        st.warning("경찰청 소관으로 가져온 법령이 없습니다.")
+        return
+    st.write(f"**경찰청 소관** · 공식 {total}건 가운데 {len(rows)}건 · 공포일 최근순")
+    open_id = st.session_state.get("law_open") or ""
+    for row in rows:
+        name = html.escape(row.get("법령명") or "")
+        bits = [row.get("제개정") or "", row.get("법령구분") or "", row.get("소관부처") or ""]
+        meta = html.escape(
+            " · ".join(
+                x
+                for x in (
+                    "공포 " + (row.get("공포일자") or ""),
+                    "시행 " + (row.get("시행일자") or ""),
+                    " · ".join(b for b in bits if b),
+                )
+                if x and x not in ("공포 ", "시행 ")
+            )
+        )
+        st.markdown(
+            f"<div class='case-card'><p class='case-meta'>{meta}</p>"
+            f"<p class='case-name'>{name}</p></div>",
+            unsafe_allow_html=True,
+        )
+        rid = row.get("id") or ""
+        st.markdown('<div class="case-actions-mark"></div>', unsafe_allow_html=True)
+        b1, b2, _ = st.columns([1.05, 1.4, 3.55])
+        with b1:
+            if st.button("개정 이유", key=f"law_open_{rid}"):
+                st.session_state.law_open = rid
+                st.rerun()
+        with b2:
+            st.link_button(
+                "법령정보센터 원문",
+                precedent.official_law_link(rid, row.get("법령명") or ""),
+                use_container_width=True,
+            )
+        if open_id and rid and open_id == rid:
+            detail = _cached_amend(oc, rid)
+            reason = (detail.get("제개정이유") or "").strip()
+            if not reason:
+                st.warning("제개정이유가 없습니다. 원문을 여십시오.")
+            else:
+                st.write("**제개정이유**")
+                st.write(reason[:2000])
+
+
+@st.cache_data(ttl=1800)
+def _cached_prec(oc: str, jo: str, query: str) -> tuple[list[dict], int]:
+    return precedent.search_precedents(oc, query=query, jo=jo, display=30)
+
+
+@st.cache_data(ttl=1800)
+def _cached_detail(oc: str, prec_id: str) -> dict[str, str]:
+    return precedent.fetch_detail(oc, prec_id)
+
+
+@st.cache_data(ttl=1800)
+def _cached_laws(oc: str) -> tuple[list[dict], int]:
+    return precedent.search_police_laws(oc, display=30)
+
+
+@st.cache_data(ttl=1800)
+def _cached_amend(oc: str, mst: str) -> dict[str, str]:
+    return precedent.fetch_amend_reason(oc, mst)
+
+
+def enter_screen() -> None:
+    back, _ = st.columns([1, 3])
+    with back:
+        if st.button("← 홈으로", key="enter_back_hub"):
+            st.session_state.phase = "hub"
+            st.rerun()
+            return
+    kind = "실무역량평가 OX" if st.session_state.get("quiz_kind") == "ox" else EXAM_TITLE
+    _sect(kind, "시도청·경찰서·지구대·파출소·팀을 고른 뒤, 방을 열거나 방 번호로 들어옵니다.")
+    org = pick_org()
+    st.caption(path_text(org) if org.get("unit") and org.get("team") else "위에서 관서와 팀을 고르십시오.")
+
+    qcode = st.query_params.get("room", "")
+    with st.form("enter_form", clear_on_submit=False):
+        name = st.text_input("별명", placeholder="예: 순찰이", key="player_name")
+        join_code = st.text_input("방 번호", value=qcode, max_chars=4, placeholder="방장이 부른 4자리", key="join_code")
+        c1, c2 = st.columns(2)
+        with c1:
+            make = st.form_submit_button("방 만들기", type="primary")
+        with c2:
+            join = st.form_submit_button("방 번호로 들어가기")
+    name = (name or "").strip()
+    code = str(join_code or "").strip()
+    if make:
+        if not name:
+            st.error("별명을 넣으십시오.")
+        elif not org.get("unit") or not org.get("team"):
+            st.error("시도청·경찰서·지구대·팀을 고르십시오.")
+        else:
+            st.session_state.host_draft = {"org": org, "name": name}
+            st.session_state.phase = "host_setup"
+            st.rerun()
+    if join:
+        if not name or not code:
+            st.error("별명과 방 번호를 넣으십시오.")
+        else:
+            room = rooms.join(code, st.session_state.pid, name)
+            if room is None:
+                st.error("방이 없습니다. 번호를 확인하십시오.")
+            else:
+                _go_room(room)
+
+
+def _topic_pick() -> tuple[str, int]:
+    pick = st.selectbox("주제", labels, index=0, key="host_topic")
+    area_id, _area_name, nmax = by_label[pick][0], by_label[pick][1], by_label[pick][2]
+    if area_id == RAND_TOPIC:
+        st.caption("14개 주제 가운데 하나가 무작위로 정해집니다.")
+        return area_id, 0
+    if area_id == RAND_EXAM:
+        st.caption("14개 주제를 섞어 20문제입니다.")
+        return area_id, 20
+    count = st.select_slider("문항 수", options=_count_opts(nmax), value=nmax)
+    return area_id, int(count)
+
+
+def _mark_chances(deck: list[dict], seed: int) -> list[dict]:
+    """덱의 6분의 1을 점수 2배 찬스 문제로 찍는다."""
+    rng = random.Random(seed + 91)
+    n = len(deck)
+    if n < 4:
+        return deck
+    pick = set(rng.sample(range(n), max(1, n // 6)))
+    for i, row in enumerate(deck):
+        row["x2"] = i in pick
+    return deck
+
+
+def _build_deck(area_id: str, count: int, seed: int, kind: str):
+    if kind == "ox":
+        return make_ox_quiz(area_id, count, seed)
+    return make_quiz(area_id, count, seed)
+
+
+def host_setup_screen() -> None:
+    draft = st.session_state.get("host_draft") or {}
+    org = draft.get("org") or {}
+    name = draft.get("name") or ""
+    if not name:
+        st.session_state.phase = "enter"
+        st.rerun()
+        return
+    kind = "ox" if st.session_state.get("quiz_kind") == "ox" else "exam"
+    st.caption(path_text(org))
+    _sect(f"방장 {name}", "주제와 VS 방식을 정하십시오.")
+    area_id, count = _topic_pick()
+
+    _sect("VS 방식", "")
+    mode = st.radio(
+        "방식",
+        list(rooms.MODES),
+        format_func=lambda m: rooms.MODES[m][0],
+        horizontal=True,
+        label_visibility="collapsed",
+        key="host_mode",
+    )
+    desc, lim = rooms.MODES[mode][1], rooms.MODES[mode][2]
+    if lim and kind == "ox":
+        lim = max(12, lim - 12)
+    st.caption(
+        desc
+        + (f" 문항당 {lim}초." if lim else " 시간 제한 없이 앞뒤로 오갈 수 있습니다.")
+        + " 점수가 같으면 더 빨리 푼 쪽이 앞섭니다."
+    )
+
+    _sect("편성", "")
+    lineup = st.radio(
+        "편성",
+        ["solo", "team"],
+        format_func=lambda x: "개인전" if x == "solo" else "단체전",
+        horizontal=True,
+        label_visibility="collapsed",
+        key="host_lineup",
+    )
+    team_battle = lineup == "team"
+    if team_battle:
+        st.caption("단체전입니다. 한 명씩 돌아가며 문제를 풉니다. 차례가 아니면 보고 있습니다.")
+    else:
+        st.caption("들어온 사람이 같은 문제를 각자 풉니다. 맞힌 개수와 점수로 개인 순위를 냅니다.")
+    chance = st.checkbox("찬스 문제 넣기 (점수 2배)", value=True, key="host_chance")
+    if kind == "ox":
+        st.caption("설명이 맞으면 O, 틀리면 X입니다. 몇 개인지 묻는 문제는 숫자를 넣습니다.")
+
+    go, back, _ = st.columns([1.6, 1, 2.4])
+    with back:
+        if st.button("뒤로", key="setup_back"):
+            st.session_state.phase = "enter"
+            st.rerun()
+    with go:
+        open_room = st.button("이 설정으로 방 열기", type="primary")
+    if open_room:
+        seed = random.randint(1, 10_000_000)
+        deck, stored_id, shown = _build_deck(area_id, count, seed, kind)
+        if chance:
+            deck = _mark_chances(deck, seed)
+        room = rooms.create(
+            st.session_state.pid,
+            name,
+            stored_id,
+            shown,
+            len(deck),
+            deck,
+            org=org,
+            mode=mode,
+            team_battle=team_battle,
+            kind=kind,
+        )
+        st.session_state.host_seed = seed
+        _go_room(room)
+
+
+def _count_opts(nmax: int) -> list[int]:
+    cap = min(int(nmax), 50)
+    opts = [n for n in (5, 10, 15, 20, 25, 30, 40, 50) if n < cap]
+    opts.append(cap)
+    return opts
+
+
+def lobby_screen() -> None:
+    code = st.session_state.get("code") or ""
+    room = rooms.load(code)
+    if room is None:
+        st.warning("방이 없어졌습니다.")
+        if st.button("처음으로"):
+            st.session_state.phase = "enter"
+            st.rerun()
+        return
+    if room["status"] in ("countdown", "play", "done"):
+        st.session_state.phase = "play"
+        st.rerun()
+        return
+    pid = st.session_state.pid
+    mode = rooms.mode_of(room)
+    lim = rooms.limit_sec(room)
+    st.caption(path_text(room.get("org") or {}))
+    st.markdown(f"<div class='codebox'>{room['code']}</div>", unsafe_allow_html=True)
+    pills = [
+        f"<span class='pill'>{html.escape(room['area_name'])}</span>",
+        f"<span class='pill'>{room['count']}문항</span>",
+        f"<span class='pill gold'>{rooms.MODES[mode][0]}</span>",
+    ]
+    if lim:
+        pills.append(f"<span class='pill'>문항당 {lim}초</span>")
+    if room.get("team_battle"):
+        pills.append("<span class='pill gold'>단체전</span>")
+        pills.append("<span class='pill'>한 명씩 돌아가며</span>")
+    else:
+        pills.append("<span class='pill gold'>개인전</span>")
+    if any(d.get("x2") for d in (room.get("deck") or [])):
+        pills.append("<span class='pill gold'>찬스 문제 2배</span>")
+    st.markdown("".join(pills), unsafe_allow_html=True)
+    if room.get("team_battle"):
+        st.caption("이 번호를 불러 주십시오. 단체전입니다. 팀원이 한 명씩 돌아가며 풉니다.")
+    else:
+        st.caption("이 번호를 불러 주십시오. 개인전입니다. 들어온 사람이 각자 같은 문제를 풉니다.")
+
+    is_host = pid == room["host_id"]
+    if room.get("team_battle"):
+        _sect("편 고르기", "누르면 바뀝니다. 방장은 한 번에 갈라 줄 수 있습니다.")
+        cs = st.columns([1, 1, 1.4, 2.6])
+        for i, side in enumerate(rooms.SIDES):
+            with cs[i]:
+                mine = (room["players"].get(pid) or {}).get("side") == side
+                if st.button(side, key=f"side_{side}", type="primary" if mine else "secondary"):
+                    rooms.set_side(code, pid, side)
+                    st.rerun()
+        if is_host:
+            with cs[2]:
+                if st.button("자동 편성", key="auto_side"):
+                    rooms.auto_sides(code, pid)
+                    st.rerun()
+
+    @st.fragment(run_every=2)
+    def wait_peers():
+        live = rooms.load(code)
+        if live is None:
+            return
+        chips = []
+        for who, p in live["players"].items():
+            cls = SIDE_CLASS.get(p.get("side") or "", "")
+            if who == live.get("host_id"):
+                cls += " host"
+            label = html.escape(p.get("name") or "")
+            chips.append(f"<span class='peer {cls}'><i></i>{label}</span>")
+        _sect(f"들어온 사람 {len(chips)}명", "방장이 시작할 때까지 기다립니다.")
+        st.markdown("<div class='peers'>" + "".join(chips) + "</div>", unsafe_allow_html=True)
+        if live["status"] in ("countdown", "play", "done") and st.session_state.phase == "lobby":
+            st.session_state.phase = "play"
+            st.rerun()
+
+    wait_peers()
+    if is_host:
+        s1, _ = st.columns([1.6, 3.4])
+        with s1:
+            if st.button("시작", type="primary"):
+                rooms.start(code, pid)
+                st.session_state.phase = "play"
+                st.rerun()
+    else:
+        st.info("방장이 시작을 누를 때까지 기다리십시오.")
+    st.markdown('<div class="mini-mark"></div>', unsafe_allow_html=True)
+    b1, _ = st.columns([1, 4])
+    with b1:
+        if st.button("나가기", key="lobby_leave"):
+            st.session_state.phase = "enter"
+            st.session_state.pop("code", None)
+            _drop_room()
+            st.rerun()
+    _law_brief()
+
+
+def _law_brief() -> None:
+    """대기하는 동안 최근 개정 법령을 읽고 갑니다."""
+    oc = _law_oc()
+    if not oc:
+        return
+    try:
+        rows, _total = _cached_laws(oc)
+    except Exception:
+        return
+    rows = [r for r in rows if "직제" not in (r.get("법령명") or "")][:3]
+    if not rows:
+        return
+    _sect("기다리는 동안 · 최근 개정", "경찰청 소관 법령 공포 최근순")
+    for r in rows:
+        meta = " · ".join(
+            x for x in (
+                "공포 " + (r.get("공포일자") or ""),
+                "시행 " + (r.get("시행일자") or ""),
+                r.get("제개정") or "",
+            ) if x.strip() not in ("공포", "시행", "")
+        )
+        st.markdown(
+            f"<div class='brief'><p>{html.escape(meta)}</p><b>{html.escape(r.get('법령명') or '')}</b></div>",
+            unsafe_allow_html=True,
+        )
+
+
+def _hud(room: dict, me: dict, idx: int, total: int, pos: int, n_players: int, left: float | None, lim: int) -> None:
+    pct = int(100 * idx / max(1, total))
+    chips = [
+        f"<span class='chip'>문항<b>{min(idx + 1, total)}/{total}</b></span>",
+        f"<span class='chip'>점수<b>{int(me.get('points') or 0)}</b></span>",
+        f"<span class='chip'>맞힘<b>{int(me.get('score') or 0)}</b></span>",
+    ]
+    streak = int(me.get("streak") or 0)
+    if streak >= 2:
+        chips.append(f"<span class='chip hot'>{streak}연속</span>")
+    side = me.get("side") or ""
+    if side:
+        chips.append(f"<span class='chip'>{html.escape(side)}</span>")
+    chips.append("<span class='grow'></span>")
+    chips.append(f"<span class='chip gold'>내 순위<b>{pos}위 / {n_players}명</b></span>")
+    tmr = ""
+    if lim and left is not None:
+        w = max(0.0, min(100.0, 100.0 * left / lim))
+        tmr = f"<div class='tmr'><i style='--w:{w:.1f}%; animation-duration:{max(0.1, left):.1f}s'></i></div>"
+    st.markdown(
+        f"<div class='hud'><div class='prog'><i style='width:{pct}%'></i></div>"
+        f"<div class='hud-row'>{''.join(chips)}</div>{tmr}</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def _advance(code: str, pid: str, idx: int, total: int) -> bool:
+    """다음 문항으로. 마지막이면 끝냈는지 확인한다."""
+    if idx + 1 < total:
+        rooms.seek(code, pid, idx + 1)
+        return True
+    rooms.finish(code, pid)
+    live = rooms.load(code) or {}
+    return bool((live.get("players") or {}).get(pid, {}).get("done"))
+
+
+def _beep(kind: str) -> None:
+    n = int(st.session_state.get("_sfx_n") or 0) + 1
+    st.session_state["_sfx_n"] = n
+    st.session_state["_pending_sfx"] = (kind, f"{kind}-{n}")
+
+
+def _cheer(ok: bool, streak: int) -> None:
+    """맞힘·연속 정답 때 직접 만든 신호음과 화면 이펙트를 한 번 올린다."""
+    n = int(streak or 0)
+    if ok:
+        if n >= 8:
+            kind = "combo8"
+        elif n >= 5:
+            kind = "combo5"
+        elif n >= 3:
+            kind = "combo3"
+        elif n >= 2:
+            kind = "combo2"
+        else:
+            kind = "ok"
+    else:
+        kind = "miss"
+    _beep(kind)
+    st.session_state["_pending_fx"] = {"ok": bool(ok), "streak": n}
+
+
+def _react_answer(code: str, pid: str) -> None:
+    live = rooms.load(code) or {}
+    me = (live.get("players") or {}).get(pid) or {}
+    hist = me.get("history") or []
+    ok = bool(hist[-1].get("ok")) if hist else False
+    _cheer(ok, int(me.get("streak") or 0))
+
+
+def _show_fx() -> None:
+    fx = st.session_state.pop("_pending_fx", None)
+    if not fx:
+        return
+    ok = bool(fx.get("ok"))
+    n = int(fx.get("streak") or 0)
+    if ok:
+        cls = "fx-pop"
+        if n >= 5:
+            cls += " hot big"
+        elif n >= 2:
+            cls += " hot"
+        title = f"{n}연속" if n >= 2 else "맞힘"
+        note = "연속으로 맞혔습니다" if n >= 2 else "정답입니다"
+        sparks = "".join(
+            f"<i class='fx-spark' style='--dx:{dx}px;--dy:{dy}px'></i>"
+            for dx, dy in ((-90, -40), (80, -50), (-70, 55), (95, 40), (0, -80), (-40, 70), (50, 75))
+        )
+        rings = "<i class='fx-ring'></i>" + ("<i class='fx-ring r2'></i>" if n >= 3 else "")
+        flash = "<div class='fx-flash'></div>"
+    else:
+        cls = "fx-pop miss"
+        title = "아쉽"
+        note = "다음 문항에서 다시"
+        sparks = ""
+        rings = ""
+        flash = "<div class='fx-flash miss'></div>"
+    st.markdown(
+        f"<div class='fx-layer'>{flash}{rings}{sparks}"
+        f"<div class='{cls}'><b>{html.escape(title)}</b><span>{html.escape(note)}</span></div></div>",
+        unsafe_allow_html=True,
+    )
+
+
+def done_screen(room: dict, pid: str, deck: list[dict], total: int) -> None:
+    code = room["code"]
+    me = room["players"][pid]
+    mode = rooms.mode_of(room)
+    sfx.play("done", f"{code}-{room.get('round') or 1}-done-{pid}")
+    if mode == "survival" and me.get("out"):
+        st.error(f"탈락. {int(me.get('score') or 0)}문제까지 살아남았습니다.")
+    else:
+        st.success(f"끝. {int(me.get('score') or 0)}/{total}개 맞히고 {int(me.get('points') or 0)}점입니다.")
+    best = int(me.get("best") or 0)
+    if best >= 3:
+        st.caption(f"최고 {best}문제 연속으로 맞혔습니다.")
+
+    @st.fragment(run_every=2)
+    def live_rank():
+        live = rooms.load(code)
+        if live is None:
+            return
+        all_done = all(p.get("done") for p in live["players"].values())
+        show_ranking(live, pid, "최종 순위" if all_done else "실시간 순위")
+        if all_done:
+            me_live = (live.get("players") or {}).get(pid) or {}
+            show_standings_board(
+                live.get("kind") or "exam",
+                rooms.mode_of(live),
+                viewer=((me_live.get("name") or ""), path_text(live.get("org") or {})),
+                title="랭킹",
+            )
+        if not all_done:
+            st.caption("아직 푸는 사람이 있습니다.")
+
+    live_rank()
+    show_review(me.get("history"), deck)
+
+    if pid == room.get("host_id"):
+        _sect("방장 · 한 판 더", "같은 방 번호 그대로 이어서 합니다.")
+        h1, h2 = st.columns(2)
+        with h1:
+            if st.button("새 문제로 한 판 더", type="primary", key="again_new"):
+                seed = random.randint(1, 10_000_000)
+                kind = room.get("kind") or "exam"
+                new_deck, _sid, _shown = _build_deck(room["area_id"], room["count"], seed, kind)
+                if any(d.get("x2") for d in deck):
+                    new_deck = _mark_chances(new_deck, seed)
+                rooms.restart(code, pid, new_deck)
+                st.rerun()
+        with h2:
+            bad = rooms.wrong_indices(room)
+            if st.button(f"틀린 문제만 다시 ({len(bad)}개)", disabled=not bad, key="again_wrong"):
+                rooms.restart(code, pid, [deck[i] for i in bad])
+                st.rerun()
+
+    st.markdown('<div class="mini-mark"></div>', unsafe_allow_html=True)
+    b1, _ = st.columns([1, 4])
+    with b1:
+        if st.button("나가기", key="done_leave"):
+            st.session_state.phase = "enter"
+            st.session_state.pop("code", None)
+            _drop_room()
+            st.rerun()
+
+
+def _turn_banner(room: dict, pid: str) -> None:
+    rel = room.get("relay") or {}
+    side = rel.get("side") or ""
+    batter = rel.get("pid") or ""
+    name = ((room.get("players") or {}).get(batter) or {}).get("name") or ""
+    cls = SIDE_CLASS.get(side, "wait")
+    mine = batter == pid
+    nxt = []
+    for s in rooms.SIDES:
+        row = rooms.lineup(room, s)
+        cur = int((rel.get("cursor") or {}).get(s) or 0)
+        if not row:
+            continue
+        nxt_pid = row[cur % len(row)]
+        nxt_name = ((room.get("players") or {}).get(nxt_pid) or {}).get("name") or ""
+        if nxt_name:
+            nxt.append(f"{s} 다음 {nxt_name}")
+    hint = "당신 차례입니다. 답을 고르십시오." if mine else "보고 계십시오. 답을 고르지 않습니다."
+    extra = " · ".join(nxt)
+    st.markdown(
+        f"<div class='seat {cls}'><b>지금 차례 · {html.escape(side)}</b>"
+        f"<strong>{html.escape(name)}</strong><span>{html.escape(hint)}"
+        f"{(' · ' + html.escape(extra)) if extra else ''}</span></div>",
+        unsafe_allow_html=True,
+    )
+    last = rel.get("last") or {}
+    if last:
+        mark = "맞힘" if last.get("ok") else "틀림"
+        st.caption(f"방금 {last.get('side') or ''} {last.get('name') or ''} · {mark} · {int(last.get('pts') or 0)}점")
+
+
+def play_relay(room: dict, pid: str, deck: list[dict], total: int) -> None:
+    """한 문항씩 홍·청이 나가고, 각 편은 들어온 순서대로 돌아간다."""
+    code = room["code"]
+    rel = room.get("relay") or {}
+    if room.get("status") == "done" or not rel.get("pid"):
+        done_screen(room, pid, deck, total)
+        return
+    lim = rooms.limit_sec(room)
+    rnd = int(room.get("round") or 1)
+    idx = int(rel.get("idx") or 0)
+    item = current_item(deck, idx)
+    if item is None:
+        done_screen(room, pid, deck, total)
+        return
+    double = bool(deck[idx].get("x2"))
+    batter = rel.get("pid") or ""
+    me = (room.get("players") or {}).get(pid) or {}
+    order = rooms.ranking(room)
+    pos = next((i for i, r in enumerate(order, 1) if r["pid"] == pid), len(order))
+    left = None
+    if lim:
+        left = max(0.0, rooms.deadline(room) - time.time())
+    show_teams(room)
+    _hud(room, me, idx, total, pos, len(order), left, lim)
+    _turn_banner(room, pid)
+
+    if lim:
+        @st.fragment(run_every=1)
+        def time_watch():
+            live = rooms.load(code)
+            if live is None or live.get("status") != "play":
+                return
+            cur = ((live.get("relay") or {}).get("pid") or "")
+            cur_idx = int(((live.get("relay") or {}).get("idx") or 0))
+            if cur != batter or cur_idx != idx:
+                st.rerun()
+                return
+            secs = rooms.deadline(live) - time.time()
+            if secs > 0:
+                st.caption(f"남은 시간 {int(secs) + 1}초")
+                return
+            rooms.expire_turn(code, int(item["a"]), double=double)
+            _react_answer(code, batter)
+            st.rerun()
+
+        time_watch()
+
+    render_question(item, idx + 1, total, double)
+
+    if pid == batter:
+        pick = None
+        if item.get("kind") == "num":
+            st.caption("원문 그대로입니다. 숫자를 넣고 확인을 누르십시오.")
+            nkey = f"num_{code}_{rnd}_{idx}"
+            n1, n2, _ = st.columns([1.2, 1, 2.8])
+            with n1:
+                st.number_input("숫자", min_value=0, max_value=99, step=1, key=nkey, label_visibility="collapsed")
+            with n2:
+                if st.button("확인", type="primary", key=f"numok_{code}_{rnd}_{idx}"):
+                    pick = int(st.session_state.get(nkey) or 0)
+        else:
+            pick = pick_choice(item, f"r_{code}_{rnd}_{idx}")
+        if pick is not None:
+            spent = 0
+            at = rel.get("q_at")
+            if at:
+                try:
+                    spent = int(max(0.0, time.time() - datetime.fromisoformat(at).timestamp()) * 1000)
+                except Exception:
+                    spent = 0
+            rooms.answer(code, pid, int(pick), int(item["a"]), ms=spent, double=double)
+            _react_answer(code, pid)
+            st.rerun()
+    else:
+        if item.get("choices"):
+            shown = " · ".join(
+                (c if item.get("ox") else f"{circle(i)} {c}")
+                for i, c in enumerate(item["choices"])
+            )
+            st.caption("보기 · " + shown)
+        else:
+            st.caption("숫자를 넣는 문제입니다. 지금 차례인 사람만 넣습니다.")
+
+        @st.fragment(run_every=1)
+        def wait_turn():
+            live = rooms.load(code)
+            if live is None:
+                return
+            nxt = ((live.get("relay") or {}).get("pid") or "")
+            nidx = int(((live.get("relay") or {}).get("idx") or 0))
+            if live.get("status") != "play" or nxt != batter or nidx != idx:
+                st.rerun()
+
+        wait_turn()
+
+    st.markdown('<div class="mini-mark"></div>', unsafe_allow_html=True)
+    b1, _ = st.columns([1, 4])
+    with b1:
+        if st.button("나가기", key="leave_relay"):
+            st.session_state.phase = "enter"
+            st.session_state.pop("code", None)
+            _drop_room()
+            st.rerun()
+    with st.expander("지금 순위 · 교육장 전광판", expanded=False):
+        @st.fragment(run_every=2)
+        def live_board():
+            live = rooms.load(code)
+            if live is None:
+                return
+            show_ranking(live, pid, "실시간 순위")
+
+        live_board()
+
+
+def play_screen() -> None:
+    code = st.session_state.get("code") or ""
+    room = rooms.load(code)
+    if room is None:
+        st.warning("진행 중이던 문제가 없어졌습니다.")
+        if st.button("처음으로"):
+            st.session_state.phase = "enter"
+            st.rerun()
+        return
+    if room["status"] == "lobby":
+        st.session_state.phase = "lobby"
+        st.rerun()
+        return
+    room = rooms.begin_if_due(code) or room
+    pid = st.session_state.pid
+    if pid not in room["players"]:
+        rooms.join(code, pid, (st.session_state.get("player_name") or "").strip() or "참가")
+        room = rooms.load(code) or room
+    me = room["players"][pid]
+    deck = room["deck"]
+    total = len(deck)
+    mode = rooms.mode_of(room)
+    lim = rooms.limit_sec(room)
+    rnd = int(room.get("round") or 1)
+    pending = st.session_state.pop("_pending_sfx", None)
+    if pending:
+        sfx.play(pending[0], pending[1])
+    _show_fx()
+
+    head = [
+        f"<span class='pill'>방 {room['code']}</span>",
+        f"<span class='pill gold'>{rooms.MODES[mode][0]}</span>",
+        f"<span class='pill'>{html.escape(room['area_name'])}</span>",
+    ]
+    if rnd > 1:
+        head.append(f"<span class='pill'>{rnd}판째</span>")
+    if room.get("team_battle") and me.get("side"):
+        cls = SIDE_CLASS.get(me["side"], "")
+        head.append(f"<span class='pill {cls}'>{me['side']}</span>")
+    st.caption(path_text(room.get("org") or {}))
+    st.markdown("".join(head), unsafe_allow_html=True)
+
+    if room["status"] == "countdown":
+        if room.get("play_at"):
+            sfx.countdown(room["play_at"], f"cd-{code}-{room.get('play_at')}")
+
+        @st.fragment(run_every=1)
+        def tick():
+            live = rooms.begin_if_due(code)
+            if live is None:
+                return
+            n = rooms.seconds_left(live)
+            if n <= 0 or live.get("status") == "play":
+                st.rerun()
+                return
+            st.markdown(f"<div class='codebox'>{n}</div>", unsafe_allow_html=True)
+            st.caption(rooms.MODES[mode][1])
+
+        tick()
+        if room.get("team_battle"):
+            show_teams(room)
+        st.markdown('<div class="mini-mark"></div>', unsafe_allow_html=True)
+        cd1, _ = st.columns([1, 4])
+        with cd1:
+            if st.button("나가기", key="leave_cd"):
+                st.session_state.phase = "enter"
+                st.session_state.pop("code", None)
+                _drop_room()
+                st.rerun()
+        return
+
+    if rooms.relay_on(room):
+        play_relay(room, pid, deck, total)
+        return
+
+    if me.get("done"):
+        done_screen(room, pid, deck, total)
+        return
+
+    idx = int(me["idx"])
+    item = current_item(deck, idx)
+    if item is None:
+        st.success(f"끝. {int(me.get('score') or 0)}/{total}")
+        return
+    double = bool(deck[idx].get("x2"))
+
+    rooms.touch(code, pid, idx)
+    room = rooms.load(code) or room
+    me = room["players"][pid]
+    order = rooms.ranking(room)
+    pos = next((i for i, r in enumerate(order, 1) if r["pid"] == pid), len(order))
+    left = None
+    if lim:
+        left = max(0.0, rooms.deadline(room, me) - time.time())
+    _hud(room, me, idx, total, pos, len(order), left, lim)
+
+    saved = next((h for h in (me.get("history") or []) if int(h.get("idx") or -1) == idx), None)
+    sel_key = f"sel_{code}_{rnd}_{idx}"
+    if sel_key not in st.session_state and saved is not None:
+        st.session_state[sel_key] = int(saved["choice"])
+
+    if lim:
+        @st.fragment(run_every=1)
+        def time_watch():
+            live = rooms.load(code)
+            if live is None or live.get("status") != "play":
+                return
+            p = (live.get("players") or {}).get(pid) or {}
+            if p.get("done") or int(p.get("idx") or 0) != idx:
+                return
+            secs = rooms.deadline(live, p) - time.time()
+            if secs > 0:
+                st.caption(f"남은 시간 {int(secs) + 1}초")
+                return
+            rooms.answer(code, pid, -1, int(item["a"]), ms=lim * 1000, double=double)
+            _react_answer(code, pid)
+            _advance(code, pid, idx, total)
+            st.rerun()
+
+        time_watch()
+
+    render_question(item, idx + 1, total, double)
+
+    pick = None
+    if item.get("kind") == "num":
+        st.caption("원문 그대로입니다. 숫자를 넣고 확인을 누르십시오.")
+        nkey = f"num_{code}_{rnd}_{idx}"
+        if nkey not in st.session_state and saved is not None and int(saved["choice"]) >= 0:
+            st.session_state[nkey] = int(saved["choice"])
+        n1, n2, _ = st.columns([1.2, 1, 2.8])
+        with n1:
+            st.number_input("숫자", min_value=0, max_value=99, step=1, key=nkey, label_visibility="collapsed")
+        with n2:
+            if st.button("확인", type="primary", key=f"numok_{code}_{rnd}_{idx}"):
+                pick = int(st.session_state.get(nkey) or 0)
+    else:
+        pick = pick_choice(item, f"r_{code}_{rnd}_{idx}", st.session_state.get(sel_key))
+
+    if pick is not None:
+        spent = 0
+        if me.get("q_at"):
+            try:
+                spent = int(max(0.0, time.time() - datetime.fromisoformat(me["q_at"]).timestamp()) * 1000)
+            except Exception:
+                spent = 0
+        rooms.answer(code, pid, int(pick), int(item["a"]), ms=spent, double=double)
+        st.session_state[sel_key] = pick
+        _react_answer(code, pid)
+        after = rooms.load(code) or room
+        if (after.get("players") or {}).get(pid, {}).get("done"):
+            st.rerun()
+        if _advance(code, pid, idx, total):
+            st.rerun()
+        else:
+            st.error("아직 안 푼 문제가 있습니다. 이전으로 돌아가 고르십시오.")
+
+    if mode == "classic":
+        st.markdown('<div class="mini-mark"></div>', unsafe_allow_html=True)
+        nav = st.columns([1, 1, 1, 3])
+        with nav[0]:
+            if st.button("이전", disabled=idx <= 0, key="nav_prev"):
+                _beep("tick")
+                rooms.seek(code, pid, idx - 1)
+                st.rerun()
+        with nav[1]:
+            if st.button("다음", key="nav_next"):
+                _beep("tick")
+                if _advance(code, pid, idx, total):
+                    st.rerun()
+                else:
+                    st.error("아직 안 푼 문제가 있습니다. 이전으로 돌아가 고르십시오.")
+        with nav[2]:
+            if st.button("나가기", key="leave_play"):
+                st.session_state.phase = "enter"
+                st.session_state.pop("code", None)
+                _drop_room()
+                st.rerun()
+    else:
+        st.caption("되돌아갈 수 없습니다. 고르면 바로 다음 문제로 갑니다.")
+        st.markdown('<div class="mini-mark"></div>', unsafe_allow_html=True)
+        b1, _ = st.columns([1, 4])
+        with b1:
+            if st.button("나가기", key="leave_play2"):
+                st.session_state.phase = "enter"
+                st.session_state.pop("code", None)
+                _drop_room()
+                st.rerun()
+
+    with st.expander("지금 순위 · 교육장 전광판", expanded=False):
+        @st.fragment(run_every=2)
+        def live_board():
+            live = rooms.load(code)
+            if live is None:
+                return
+            show_ranking(live, pid, "실시간 순위")
+
+        live_board()
+
+
+phase = st.session_state.phase
+if phase != "gate":
+    _render_header(phase)
+if phase == "hub":
+    hub_screen()
+elif phase == "cases":
+    cases_screen()
+elif phase == "laws":
+    laws_screen()
+elif phase == "enter":
+    enter_screen()
+elif phase == "host_setup":
+    host_setup_screen()
+elif phase == "lobby":
+    lobby_screen()
+else:
+    play_screen()
