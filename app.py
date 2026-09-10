@@ -1111,15 +1111,14 @@ def hub_screen() -> None:
                 st.rerun()
     st.caption("최신판례·법률개정은 법제처 원문 그대로 공식 자료만 제공")
     _sect("랭킹", "누적과 단일(한 판 최고)을 나눠 봅니다. 종목·방식별로 10위까지 공개합니다.")
-    rk0, rk1, rk2 = st.columns(3)
-    with rk0:
-        rank_scope = st.radio(
-            "구분",
-            ["cumul", "single"],
-            format_func=lambda x: "누적" if x == "cumul" else "단일 최고",
-            horizontal=True,
-            key="rank_scope",
-        )
+    rank_scope = st.radio(
+        "구분",
+        ["cumul", "single"],
+        format_func=lambda x: "누적 랭킹" if x == "cumul" else "단일 최고 랭킹",
+        horizontal=True,
+        key="rank_scope",
+    )
+    rk1, rk2 = st.columns(2)
     with rk1:
         rank_kind = st.radio(
             "종목",
@@ -1136,6 +1135,10 @@ def hub_screen() -> None:
             horizontal=True,
             key="rank_mode",
         )
+    if rank_scope == "single":
+        st.caption("한 판에서 낸 최고 점수·맞힌 개수 기준입니다. 여러 판을 합치지 않습니다.")
+    else:
+        st.caption("여러 판의 점수·맞힌 개수를 합친 누적 기준입니다.")
     show_standings_board(rank_kind, rank_mode, title="", scope=rank_scope)
     recent = standings.recent(6, kind=rank_kind, mode=rank_mode)
     if recent:
