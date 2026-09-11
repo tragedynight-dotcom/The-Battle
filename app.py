@@ -2420,9 +2420,12 @@ def _team_streak(room: dict | None, side: str) -> int:
 
 def _cheer_n(room: dict | None, pid: str, me: dict | None = None) -> int:
     me = me or ((room or {}).get("players") or {}).get(pid) or {}
+    personal = int(me.get("streak") or 0)
     if rooms.relay_on(room):
-        return _team_streak(room, me.get("side") or "")
-    return int(me.get("streak") or 0)
+        team = _team_streak(room, me.get("side") or "")
+        # 팀 연속이 아직 안 쓰인 방(구버전)이면 개인 연속으로 표시·이펙트
+        return team if team > 0 else personal
+    return personal
 
 
 def _hud(room: dict, me: dict, idx: int, total: int, pos: int, n_players: int, left: float | None, lim: int) -> None:
@@ -2499,20 +2502,17 @@ def _react_answer(code: str, pid: str) -> None:
 def _show_fx() -> None:
     fx = st.session_state.pop("_pending_fx", None)
     pending = st.session_state.pop("_pending_sfx", None)
-    tok = ""
-    if pending:
-        tok = str(pending[1])
-        try:
-            sfx.play(pending[0], tok)
-        except Exception:
-            pass
-    if not fx:
+    if not fx and not pending:
         return
-    ok = bool(fx.get("ok"))
-    n = int(fx.get("streak") or 0)
-    fx_tok = tok or f"fx-{int(st.session_state.get('_sfx_n') or 0)}-{n}-{'ok' if ok else 'miss'}"
+    ok = bool((fx or {}).get("ok")) if fx else True
+    n = int((fx or {}).get("streak") or 0) if fx else 0
+    kind = str(pending[0]) if pending else ("ok" if ok else "miss")
+    tok = str(pending[1]) if pending else f"fx-{int(st.session_state.get('_sfx_n') or 0)}-{n}-{kind}"
     try:
-        sfx.flash_fx(ok, n, fx_tok)
+        if fx is not None:
+            sfx.cue(ok, n, kind, tok)
+        else:
+            sfx.play(kind, tok)
     except Exception:
         pass
 

@@ -173,70 +173,80 @@ def _silent_b64() -> str:
 
 
 def _play_js(b64: str, *, offset: float | None = None) -> str:
-    """겉 창(top) Audio로 재생. iframe autoplay 차단·콘솔 에러를 줄인다."""
+    """현재 창 Web Audio 재생. 공유 Audio pause를 쓰지 않아 소리가 덜 씹힌다."""
     off = "null" if offset is None else str(float(offset))
     silent = _silent_b64()
     return f"""
 <script>
 (function () {{
-  function host() {{
-    try {{ if (window.top && window.top.document) return window.top; }} catch (e) {{}}
-    try {{ return window.parent; }} catch (e) {{}}
-    return window;
-  }}
-  var w = host();
-  try {{
-    if (!w.__tbUnlockBound) {{
-      w.__tbUnlockBound = true;
-      var unlock = function () {{
-        try {{
-          var Ctx = w.AudioContext || w.webkitAudioContext;
-          if (Ctx) {{
-            w.__tbCtx = w.__tbCtx || new Ctx();
-            if (w.__tbCtx.state === "suspended") w.__tbCtx.resume();
-          }}
-          var s = w.__tbSilent || new w.Audio("data:audio/wav;base64,{silent}");
-          w.__tbSilent = s;
-          s.volume = 0.01;
-          var p = s.play();
-          if (p && p.then) p.then(function () {{
-            try {{ s.pause(); }} catch (e) {{}}
-            w.__tbAudioReady = true;
-          }}).catch(function () {{}});
-        }} catch (e) {{}}
-      }};
-      w.document.addEventListener("touchstart", unlock, {{ capture: true, passive: true }});
-      w.document.addEventListener("click", unlock, {{ capture: true, passive: true }});
-    }}
-  }} catch (e) {{}}
-  function go() {{
+  var w = window;
+  function unlock() {{
     try {{
-      var a = w.__tbSfx;
-      if (!a) {{
-        a = new w.Audio();
-        w.__tbSfx = a;
+      var Ctx = w.AudioContext || w.webkitAudioContext;
+      if (Ctx) {{
+        w.__tbCtx = w.__tbCtx || new Ctx();
+        if (w.__tbCtx.state === "suspended") w.__tbCtx.resume();
       }}
-      a.pause();
-      a.src = "data:audio/wav;base64,{b64}";
+      if (!w.__tbSilent) {{
+        w.__tbSilent = new w.Audio("data:audio/wav;base64,{silent}");
+        w.__tbSilent.volume = 0.01;
+      }}
+      var p = w.__tbSilent.play();
+      if (p && p.then) p.then(function () {{
+        try {{ w.__tbSilent.pause(); }} catch (e) {{}}
+        w.__tbAudioReady = true;
+      }}).catch(function () {{}});
+    }} catch (e) {{}}
+  }}
+  if (!w.__tbUnlockBound) {{
+    w.__tbUnlockBound = true;
+    w.document.addEventListener("touchstart", unlock, {{ capture: true, passive: true }});
+    w.document.addEventListener("pointerdown", unlock, {{ capture: true, passive: true }});
+    w.document.addEventListener("click", unlock, {{ capture: true, passive: true }});
+  }}
+  unlock();
+  function viaTag(data, offset) {{
+    try {{
+      var a = new w.Audio("data:audio/wav;base64," + data);
       a.volume = 1;
+      w.__tbKeep = w.__tbKeep || [];
+      w.__tbKeep.push(a);
+      if (w.__tbKeep.length > 8) w.__tbKeep.shift();
       var start = function () {{
         try {{
-          var off = {off};
-          if (off !== null && !isNaN(off)) a.currentTime = off;
-          else a.currentTime = 0;
+          if (offset !== null && !isNaN(offset) && offset > 0) a.currentTime = offset;
         }} catch (e) {{}}
-        var p = a.play();
-        if (p && p.catch) p.catch(function () {{}});
+        a.play().catch(function () {{}});
       }};
       if (a.readyState >= 2) start();
       else {{
         a.addEventListener("loadeddata", start, {{ once: true }});
-        a.addEventListener("canplaythrough", start, {{ once: true }});
-        setTimeout(start, 40);
+        setTimeout(start, 60);
       }}
     }} catch (e) {{}}
   }}
-  go();
+  function playWav(data, offset) {{
+    unlock();
+    var ctx = w.__tbCtx;
+    if (!ctx) {{ viaTag(data, offset); return; }}
+    try {{
+      var bin = atob(data);
+      var bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      ctx.decodeAudioData(bytes.buffer.slice(0), function (ab) {{
+        try {{
+          if (ctx.state === "suspended") ctx.resume();
+          var src = ctx.createBufferSource();
+          src.buffer = ab;
+          src.connect(ctx.destination);
+          var off = (offset === null || isNaN(offset)) ? 0 : Math.max(0, offset);
+          if (off > 0 && off < ab.duration) src.start(0, off);
+          else src.start(0);
+        }} catch (e) {{ viaTag(data, offset); }}
+      }}, function () {{ viaTag(data, offset); }});
+    }} catch (e) {{ viaTag(data, offset); }}
+  }}
+  playWav("{b64}", {off});
 }})();
 </script>
 """
@@ -247,7 +257,7 @@ def arm_unlock() -> None:
     if st.session_state.get("_sfx_armed"):
         return
     st.session_state._sfx_armed = True
-    components.html(_play_js(_silent_b64()), height=0, width=0)
+    components.html(_play_js(_silent_b64()), height=1, width=1)
 
 
 def play(kind: str, token: str) -> None:
@@ -255,65 +265,125 @@ def play(kind: str, token: str) -> None:
         return
     st.session_state._sfx_token = token
     b64 = base64.b64encode(_clip(kind)).decode("ascii")
-    components.html(_play_js(b64), height=0, width=0)
+    components.html(_play_js(b64), height=1, width=1)
 
 
-def flash_fx(ok: bool, streak: int, token: str) -> None:
-    """정답·콤보 화면 이펙트. 겉창(body)에 붙여 Streamlit 칸·iframe에서도 보이게 한다."""
+def _fx_meta(ok: bool, streak: int) -> tuple[str, str, str, int, bool]:
+    """(title, note, tier, life_ms, soft). soft면 상단 작은 토스트만(문제 가림 없음)."""
+    n = max(0, int(streak or 0))
+    if ok:
+        if n >= 8:
+            return f"{n}연속!", "대폭발 콤보", "big", 1500, False
+        if n >= 5:
+            return f"{n}연속!", "콤보가 터졌습니다", "big", 1500, False
+        if n >= 3:
+            return f"{n}연속!", "연속 정답", "hot", 1400, False
+        if n >= 2:
+            return f"{n}연속!", "콤보 시작", "hot", 1300, False
+        return "정답", "", "ok", 700, True
+    return "아쉽", "다음 문항에서 다시", "miss", 900, True
+
+
+def cue(ok: bool, streak: int, kind: str, token: str) -> None:
+    """정답 소리+화면을 한 번에. 단체전 첫 정답은 상단 토스트만."""
     if st.session_state.get("_fx_token") == token:
         return
     st.session_state._fx_token = token
+    st.session_state._sfx_token = token
     n = max(0, int(streak or 0))
-    if ok:
-        title = f"{n}연속!" if n >= 2 else "정답"
-        if n >= 8:
-            note = "대폭발 콤보"
-            tier = "big"
-        elif n >= 5:
-            note = "콤보가 터졌습니다"
-            tier = "big"
-        elif n >= 3:
-            note = "연속 정답"
-            tier = "hot"
-        elif n >= 2:
-            note = "콤보 시작"
-            tier = "hot"
-        else:
-            note = ""
-            tier = "ok"
-    else:
-        title = "아쉽"
-        note = "다음 문항에서 다시"
-        tier = "miss"
-    # 첫 정답은 문제 가림 막기: 폭죽·풀스크린 플래시 없음
-    burst_n = 0 if (not ok or n < 2) else (14 if n < 5 else (18 if n < 8 else 26))
-    spark_on = "true" if (ok and n >= 2) else "false"
-    ring_on = "true" if (ok and n >= 2) else "false"
-    life_ms = 850 if tier == "ok" else (1100 if tier == "miss" else 1500)
+    title, note, tier, life_ms, soft = _fx_meta(ok, n)
+    b64 = base64.b64encode(_clip(kind)).decode("ascii")
+    burst_n = 0 if soft or not ok else (14 if n < 5 else (18 if n < 8 else 26))
     components.html(
         f"""
-<div id="tb-fx-seed" style="display:none"></div>
 <script>
 (function () {{
-  var ok = {str(ok).lower()};
+  var ok = {str(bool(ok)).lower()};
+  var soft = {str(bool(soft)).lower()};
   var tier = {tier!r};
   var title = {title!r};
   var note = {note!r};
-  var burstN = {burst_n};
-  var sparkOn = {spark_on};
-  var ringOn = {ring_on};
-  var lifeMs = {life_ms};
-  function host() {{
-    try {{ if (window.top && window.top.document && window.top.document.body) return window.top; }} catch (e) {{}}
-    try {{ if (window.parent && window.parent.document && window.parent.document.body) return window.parent; }} catch (e) {{}}
-    return window;
-  }}
-  var w = host();
+  var burstN = {int(burst_n)};
+  var lifeMs = {int(life_ms)};
+  var b64 = {b64!r};
+  var w = window;
   var doc = w.document;
+
+  function unlock() {{
+    try {{
+      var Ctx = w.AudioContext || w.webkitAudioContext;
+      if (Ctx) {{
+        w.__tbCtx = w.__tbCtx || new Ctx();
+        if (w.__tbCtx.state === "suspended") w.__tbCtx.resume();
+      }}
+    }} catch (e) {{}}
+  }}
+  function viaTag(data) {{
+    try {{
+      var a = new w.Audio("data:audio/wav;base64," + data);
+      a.volume = 1;
+      w.__tbKeep = w.__tbKeep || [];
+      w.__tbKeep.push(a);
+      if (w.__tbKeep.length > 8) w.__tbKeep.shift();
+      var start = function () {{ a.play().catch(function () {{}}); }};
+      if (a.readyState >= 2) start();
+      else {{ a.addEventListener("loadeddata", start, {{ once: true }}); setTimeout(start, 60); }}
+    }} catch (e) {{}}
+  }}
+  function playWav(data) {{
+    unlock();
+    var ctx = w.__tbCtx;
+    if (!ctx) {{ viaTag(data); return; }}
+    try {{
+      var bin = atob(data);
+      var bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      ctx.decodeAudioData(bytes.buffer.slice(0), function (ab) {{
+        try {{
+          if (ctx.state === "suspended") ctx.resume();
+          var src = ctx.createBufferSource();
+          src.buffer = ab;
+          src.connect(ctx.destination);
+          src.start(0);
+        }} catch (e) {{ viaTag(data); }}
+      }}, function () {{ viaTag(data); }});
+    }} catch (e) {{ viaTag(data); }}
+  }}
+  playWav(b64);
+
   try {{
     var old = doc.getElementById("tb-fx-layer");
     if (old && old.parentNode) old.parentNode.removeChild(old);
   }} catch (e) {{}}
+
+  if (soft) {{
+    var toast = doc.createElement("div");
+    toast.id = "tb-fx-layer";
+    toast.style.cssText = "position:fixed;left:50%;top:10px;transform:translateX(-50%);z-index:2147483000;"
+      + "pointer-events:none;font-family:Pretendard,Malgun Gothic,sans-serif;"
+      + "font-weight:800;font-size:14px;letter-spacing:-.02em;padding:7px 14px;border-radius:999px;"
+      + "box-shadow:0 4px 14px rgba(0,0,0,.18);animation:tbToast .65s ease-out forwards;";
+    if (ok) {{
+      toast.style.background = "rgba(16,185,129,.92)";
+      toast.style.color = "#ecfdf5";
+    }} else {{
+      toast.style.background = "rgba(163,59,50,.9)";
+      toast.style.color = "#fdeceb";
+    }}
+    toast.textContent = title;
+    if (!doc.getElementById("tb-fx-style-soft")) {{
+      var st = doc.createElement("style");
+      st.id = "tb-fx-style-soft";
+      st.textContent = "@keyframes tbToast{{0%{{opacity:0;transform:translateX(-50%) translateY(-8px);}}"
+        + "18%{{opacity:1;transform:translateX(-50%) translateY(0);}}"
+        + "75%{{opacity:1;}}100%{{opacity:0;transform:translateX(-50%) translateY(-4px);}}}}";
+      try {{ (doc.head || doc.documentElement).appendChild(st); }} catch (e) {{}}
+    }}
+    try {{ doc.body.appendChild(toast); }} catch (e) {{ return; }}
+    setTimeout(function () {{ try {{ if (toast.parentNode) toast.parentNode.removeChild(toast); }} catch (e) {{}} }}, lifeMs);
+    return;
+  }}
+
   var style = doc.getElementById("tb-fx-style");
   if (style && style.parentNode) style.parentNode.removeChild(style);
   style = doc.createElement("style");
@@ -321,80 +391,56 @@ def flash_fx(ok: bool, streak: int, token: str) -> None:
   style.textContent = `
 #tb-fx-layer {{position:fixed; inset:0; z-index:2147483000; pointer-events:none; overflow:hidden;
   font-family:Pretendard,Malgun Gothic,sans-serif;}}
-#tb-fx-layer .tb-flash {{position:absolute; inset:0; opacity:0;
-  background:radial-gradient(ellipse at 50% 12%, rgba(34,197,94,.22), transparent 48%);
-  animation:tbFlash .75s ease-out forwards;}}
-#tb-fx-layer.ok .tb-flash {{background:radial-gradient(ellipse at 50% 8%, rgba(34,197,94,.18), transparent 38%);
-  animation-duration:.55s;}}
-#tb-fx-layer.hot .tb-flash {{background:radial-gradient(ellipse at 50% 28%, rgba(255,196,72,.55), rgba(226,85,61,.18) 40%, transparent 68%);
-  animation-duration:1.15s;}}
-#tb-fx-layer.big .tb-flash {{background:radial-gradient(ellipse at 50% 26%, rgba(255,230,140,.62), rgba(226,85,61,.22) 38%, transparent 70%);
-  animation-duration:1.15s;}}
-#tb-fx-layer.miss .tb-flash {{background:radial-gradient(ellipse at 50% 18%, rgba(192,57,43,.22), transparent 55%);}}
-#tb-fx-layer .tb-pop {{position:absolute; left:50%; top:14%; transform:translate(-50%,-50%); text-align:center;
-  animation:tbPop .85s ease-out forwards;}}
-#tb-fx-layer.ok .tb-pop {{top:11%; animation-duration:.7s;}}
-#tb-fx-layer.hot .tb-pop, #tb-fx-layer.big .tb-pop {{top:28%; animation-duration:1.35s;}}
-#tb-fx-layer.miss .tb-pop {{top:16%;}}
-#tb-fx-layer .tb-pop b {{display:block; font-size:clamp(1.15rem, 4.2vw, 1.55rem); font-weight:800; color:#ecfdf5;
-  letter-spacing:-.02em; text-shadow:0 2px 10px rgba(0,0,0,.35);}}
-#tb-fx-layer.ok .tb-pop b {{font-size:clamp(1.05rem, 3.8vw, 1.35rem); color:#d1fae5;
-  background:rgba(16,185,129,.88); padding:.28rem .85rem; border-radius:999px;
-  box-shadow:0 4px 14px rgba(16,120,80,.28); text-shadow:none;}}
-#tb-fx-layer.hot .tb-pop b, #tb-fx-layer.big .tb-pop b {{
-  font-size:clamp(2.2rem, 8vw, 3.4rem); color:#ffe7a3; background:transparent; padding:0; border-radius:0;
-  text-shadow:0 8px 28px rgba(0,0,0,.5), 0 0 28px rgba(255,196,72,.7); animation:tbShake .5s ease-out;}}
-#tb-fx-layer.miss .tb-pop b {{color:#f3d0cc; font-size:clamp(1.35rem, 5vw, 1.8rem); text-shadow:0 6px 18px rgba(0,0,0,.4);}}
+#tb-fx-layer .tb-flash {{position:absolute; inset:0; opacity:0; animation:tbFlash 1.1s ease-out forwards;}}
+#tb-fx-layer.hot .tb-flash {{background:radial-gradient(ellipse at 50% 28%, rgba(255,196,72,.42), rgba(226,85,61,.12) 42%, transparent 68%);}}
+#tb-fx-layer.big .tb-flash {{background:radial-gradient(ellipse at 50% 26%, rgba(255,230,140,.5), rgba(226,85,61,.16) 40%, transparent 70%);}}
+#tb-fx-layer .tb-pop {{position:absolute; left:50%; top:26%; transform:translate(-50%,-50%); text-align:center;
+  animation:tbPop 1.3s ease-out forwards;}}
+#tb-fx-layer .tb-pop b {{display:block; font-size:clamp(2rem, 7vw, 3rem); font-weight:800; color:#ffe7a3;
+  letter-spacing:-.03em; text-shadow:0 8px 28px rgba(0,0,0,.45), 0 0 24px rgba(255,196,72,.55);
+  animation:tbShake .45s ease-out;}}
 #tb-fx-layer .tb-pop span {{display:block; margin-top:6px; color:#f7ecd0; font-weight:700;
-  font-size:clamp(1rem, 3.6vw, 1.2rem); text-shadow:0 2px 10px rgba(0,0,0,.35);}}
-#tb-fx-layer.ok .tb-pop span {{display:none;}}
-#tb-fx-layer .tb-ring {{position:absolute; left:50%; top:28%; width:28px; height:28px; border-radius:50%;
-  border:3px solid rgba(255,220,100,.95); transform:translate(-50%,-50%);
-  animation:tbRing 1.05s ease-out forwards;}}
-#tb-fx-layer .tb-ring.r2 {{animation-delay:.08s; border-color:rgba(255,255,255,.55);}}
-#tb-fx-layer .tb-ring.r3 {{animation-delay:.16s; border-color:rgba(255,160,80,.7);}}
-#tb-fx-layer .tb-spark, #tb-fx-layer .tb-burst i {{position:absolute; left:50%; top:28%; width:10px; height:10px;
-  margin:-5px 0 0 -5px; border-radius:50%; background:#ffd978; box-shadow:0 0 12px rgba(255,200,80,.9);}}
-#tb-fx-layer .tb-spark {{animation:tbSpark 1s ease-out forwards;}}
-#tb-fx-layer .tb-burst i {{animation:tbBurst .95s ease-out forwards;}}
+  font-size:clamp(.95rem, 3.4vw, 1.15rem); text-shadow:0 2px 10px rgba(0,0,0,.35);}}
+#tb-fx-layer .tb-ring {{position:absolute; left:50%; top:26%; width:28px; height:28px; border-radius:50%;
+  border:3px solid rgba(255,220,100,.9); transform:translate(-50%,-50%); animation:tbRing 1s ease-out forwards;}}
+#tb-fx-layer .tb-ring.r2 {{animation-delay:.08s; border-color:rgba(255,255,255,.5);}}
+#tb-fx-layer .tb-ring.r3 {{animation-delay:.16s; border-color:rgba(255,160,80,.65);}}
+#tb-fx-layer .tb-spark, #tb-fx-layer .tb-burst i {{position:absolute; left:50%; top:26%; width:10px; height:10px;
+  margin:-5px 0 0 -5px; border-radius:50%; background:#ffd978; box-shadow:0 0 12px rgba(255,200,80,.85);}}
+#tb-fx-layer .tb-spark {{animation:tbSpark .95s ease-out forwards;}}
+#tb-fx-layer .tb-burst i {{animation:tbBurst .9s ease-out forwards;}}
 #tb-fx-layer .tb-burst i:nth-child(odd) {{background:#fff; width:7px; height:7px;}}
 #tb-fx-layer .tb-burst i:nth-child(3n) {{background:#e2553d;}}
 @keyframes tbFlash {{0%{{opacity:1;}} 100%{{opacity:0;}}}}
-@keyframes tbPop {{0%{{opacity:0; transform:translate(-50%,-40%) scale(.85);}}
-  18%{{opacity:1; transform:translate(-50%,-50%) scale(1.04);}}
-  70%{{opacity:1;}} 100%{{opacity:0; transform:translate(-50%,-64%) scale(1);}}}}
-@keyframes tbRing {{0%{{opacity:1; width:24px; height:24px;}} 100%{{opacity:0; width:320px; height:320px;}}}}
+@keyframes tbPop {{0%{{opacity:0; transform:translate(-50%,-40%) scale(.7);}}
+  18%{{opacity:1; transform:translate(-50%,-50%) scale(1.08);}}
+  70%{{opacity:1;}} 100%{{opacity:0; transform:translate(-50%,-62%) scale(1);}}}}
+@keyframes tbRing {{0%{{opacity:1; width:24px; height:24px;}} 100%{{opacity:0; width:280px; height:280px;}}}}
 @keyframes tbSpark {{0%{{opacity:1; transform:translate(0,0) scale(1);}}
   100%{{opacity:0; transform:translate(var(--dx), var(--dy)) scale(.2);}}}}
 @keyframes tbBurst {{0%{{opacity:1; transform:rotate(var(--rot)) translate(0,0) scale(1);}}
   100%{{opacity:0; transform:rotate(var(--rot)) translate(var(--dx), var(--dy)) scale(.15);}}}}
-@keyframes tbShake {{0%{{transform:translateX(0);}} 25%{{transform:translateX(-5px) rotate(-1.5deg);}}
-  50%{{transform:translateX(5px) rotate(1.5deg);}} 100%{{transform:translateX(0);}}}}
+@keyframes tbShake {{0%{{transform:translateX(0);}} 25%{{transform:translateX(-4px);}}
+  50%{{transform:translateX(4px);}} 100%{{transform:translateX(0);}}}}
 `;
   try {{ (doc.head || doc.documentElement).appendChild(style); }} catch (e) {{}}
   var layer = doc.createElement("div");
   layer.id = "tb-fx-layer";
   layer.className = tier;
-  var html = '<div class="tb-flash"></div>';
-  if (ok && ringOn) {{
-    html += '<i class="tb-ring"></i>';
-    if (tier === "hot" || tier === "big") html += '<i class="tb-ring r2"></i>';
-    if (tier === "big") html += '<i class="tb-ring r3"></i>';
-  }}
-  if (ok && sparkOn) {{
-    [[-80,-40],[85,-50],[0,-85],[-60,55],[70,60],[-95,10],[95,15]].forEach(function (p) {{
-      html += '<i class="tb-spark" style="--dx:' + p[0] + 'px;--dy:' + p[1] + 'px"></i>';
-    }});
-  }}
+  var html = '<div class="tb-flash"></div><i class="tb-ring"></i>';
+  if (tier === "hot" || tier === "big") html += '<i class="tb-ring r2"></i>';
+  if (tier === "big") html += '<i class="tb-ring r3"></i>';
+  [[-80,-40],[85,-50],[0,-85],[-60,55],[70,60]].forEach(function (p) {{
+    html += '<i class="tb-spark" style="--dx:' + p[0] + 'px;--dy:' + p[1] + 'px"></i>';
+  }});
   if (burstN > 0) {{
     html += '<span class="tb-burst">';
     for (var i = 0; i < burstN; i++) {{
       var ang = (360 / burstN) * i;
-      var dist = 78 + (i % 5) * 20;
+      var dist = 78 + (i % 5) * 18;
       var rad = ang * Math.PI / 180;
-      var dx = Math.round(dist * Math.cos(rad));
-      var dy = Math.round(dist * Math.sin(rad));
-      html += '<i style="--dx:' + dx + 'px;--dy:' + dy + 'px;--rot:' + ang + 'deg"></i>';
+      html += '<i style="--dx:' + Math.round(dist * Math.cos(rad)) + 'px;--dy:'
+        + Math.round(dist * Math.sin(rad)) + 'px;--rot:' + ang + 'deg"></i>';
     }}
     html += '</span>';
   }}
@@ -409,9 +455,28 @@ def flash_fx(ok: bool, streak: int, token: str) -> None:
 }})();
 </script>
 """,
-        height=0,
-        width=0,
+        height=1,
+        width=1,
     )
+
+
+def flash_fx(ok: bool, streak: int, token: str) -> None:
+    """하위 호환."""
+    n = max(0, int(streak or 0))
+    if ok:
+        if n >= 8:
+            kind = "combo8"
+        elif n >= 5:
+            kind = "combo5"
+        elif n >= 3:
+            kind = "combo3"
+        elif n >= 2:
+            kind = "combo2"
+        else:
+            kind = "ok"
+    else:
+        kind = "miss"
+    cue(ok, n, kind, token)
 
 
 def countdown(play_at: str, token: str) -> None:
@@ -426,4 +491,4 @@ def countdown(play_at: str, token: str) -> None:
     b64 = base64.b64encode(_clip("count10")).decode("ascii")
     left = max(0, math.ceil((end_ms - datetime.now().timestamp() * 1000) / 1000))
     offset = min(10, max(0, 10 - left))
-    components.html(_play_js(b64, offset=float(offset)), height=0, width=0)
+    components.html(_play_js(b64, offset=float(offset)), height=1, width=1)
