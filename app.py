@@ -711,68 +711,8 @@ def _push_history(href: str) -> None:
 
 
 def _stack_detail_history(*, list_href: str, detail_href: str) -> None:
-    """목록→상세 스택. 타이머는 앱 창에 두어 Streamlit 컴포넌트 제거에도 살아남게 한다."""
-    if not list_href.startswith("?"):
-        list_href = "?" + list_href
-    if not detail_href.startswith("?"):
-        detail_href = "?" + detail_href
-    _gate_js(
-        f"""
-        var app = window.parent;
-        try {{
-          if (!app || !app.location || String(app.location.pathname||"").indexOf("/~/+/") < 0) {{
-            if (window.top && window.top.document) {{
-              var f = window.top.document.querySelector('iframe[title=streamlitApp]');
-              if (f && f.contentWindow) app = f.contentWindow;
-            }}
-          }}
-        }} catch (e) {{}}
-        try {{
-          if (!app.__battlePopReload) {{
-            app.__battlePopReload = true;
-            app.addEventListener("popstate", function () {{
-              try {{ app.location.reload(); }} catch (e) {{}}
-            }});
-          }}
-          app.__battlePendingStack = {{
-            listUrl: app.location.pathname + "{list_href}",
-            detailUrl: app.location.pathname + "{detail_href}",
-            key: "battleNavStacked:{detail_href}",
-            shellDetail: "{detail_href}",
-            tries: 0
-          }};
-          if (!app.__battleStackWorker) {{
-            app.__battleStackWorker = setInterval(function () {{
-              var p = app.__battlePendingStack;
-              if (!p) return;
-              p.tries = (p.tries || 0) + 1;
-              try {{
-                if (app.sessionStorage.getItem(p.key) === "1") {{
-                  app.__battlePendingStack = null;
-                  return;
-                }}
-                var s = app.location.search || "";
-                if (s.indexOf("case=") < 0 && s.indexOf("law=") < 0) {{
-                  if (p.tries > 25) app.__battlePendingStack = null;
-                  return;
-                }}
-                app.sessionStorage.setItem(p.key, "1");
-                app.history.replaceState({{battleNav: "list"}}, "", p.listUrl);
-                app.history.pushState({{battleNav: "detail"}}, "", p.detailUrl);
-                try {{
-                  if (window.top && window.top !== app) {{
-                    window.top.history.replaceState({{battleNav: "detail"}}, "", window.top.location.pathname + p.shellDetail);
-                  }}
-                }} catch (e) {{}}
-                app.__battlePendingStack = null;
-              }} catch (e) {{
-                if (p.tries > 25) app.__battlePendingStack = null;
-              }}
-            }}, 200);
-          }}
-        }} catch (e) {{}}
-        """
-    )
+    """호환용. 실제 스택은 _apply_browser_nav 의 상시 스크립트가 담당한다."""
+    return
 
 
 def _open_view(view: str, **extra: str) -> None:
@@ -900,6 +840,40 @@ def _apply_browser_nav() -> None:
             app.addEventListener("popstate", function () {
               try { app.location.reload(); } catch (e) {}
             });
+          }
+          // 요지/개정 상세 URL이면 목록→상세 히스토리를 한 번 쌓는다.
+          if (app && app.location) {
+            var s = app.location.search || "";
+            if (s.indexOf("case=") >= 0 || s.indexOf("law=") >= 0) {
+              var u = new URL(app.location.href);
+              var detailUrl = u.pathname + u.search;
+              var shellQ = u.search;
+              u.searchParams.delete("case");
+              u.searchParams.delete("law");
+              var listUrl = u.pathname + u.search;
+              var key = "battleNavStacked:" + detailUrl;
+              try {
+                if (app.sessionStorage.getItem(key) !== "1") {
+                  app.sessionStorage.setItem(key, "1");
+                  app.history.replaceState({battleNav: "list"}, "", listUrl);
+                  app.history.pushState({battleNav: "detail"}, "", detailUrl);
+                  try {
+                    if (window.top && window.top !== app) {
+                      window.top.history.replaceState({battleNav: "detail"}, "", window.top.location.pathname + shellQ);
+                    }
+                  } catch (e) {}
+                }
+              } catch (e) {}
+            } else {
+              try {
+                var rm = [];
+                for (var i = 0; i < app.sessionStorage.length; i++) {
+                  var k = app.sessionStorage.key(i);
+                  if (k && k.indexOf("battleNavStacked:") === 0) rm.push(k);
+                }
+                rm.forEach(function (k) { app.sessionStorage.removeItem(k); });
+              } catch (e) {}
+            }
           }
         } catch (e) {}
         """
