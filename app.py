@@ -985,11 +985,52 @@ def _apply_browser_nav() -> None:
     st.query_params["view"] = "hub"
 
 
-def _do_leave_to_enter() -> None:
+def _seed_org_widgets(org: dict | None) -> None:
+    """입장 화면으로 돌아올 때 시도청·경찰서·지구대·팀을 그대로 보여 준다."""
+    o = org or {}
+    agency = o.get("agency") or ""
+    station = o.get("station") or ""
+    unit = o.get("unit") or ""
+    team = o.get("team") or ""
+    if agency:
+        st.session_state.org_agency = agency
+    if agency and station:
+        st.session_state[f"org_station_{agency}"] = station
+    if agency and station and unit:
+        st.session_state[f"org_unit_{agency}_{station}"] = unit
+    if team:
+        if team in TEAMS:
+            st.session_state.org_team = team
+        else:
+            st.session_state.org_team = "기타"
+            st.session_state.team_custom = team
+
+
+def _vs_back_to_enter() -> None:
+    """VS 모드 '뒤로가기' 버튼용. 별명·관서·입력을 유지한 채 입장 화면으로 바로 돌아간다."""
     st.session_state.pop("code", None)
     _drop_room()
-    _goto("enter")
+    draft = st.session_state.get("host_draft") or {}
+    name = (st.session_state.get("player_name") or draft.get("name") or "").strip()
+    org = st.session_state.get("my_org") or draft.get("org") or {}
+    if name:
+        st.session_state.player_name = name
+    if org:
+        _seed_org_widgets(org)
+        st.session_state.my_org = dict(org)
+    if name or org:
+        st.session_state.host_draft = {"org": dict(org or {}), "name": name}
+    st.session_state.phase = "enter"
+    st.query_params["view"] = "enter"
+    _clear_param("room")
+    _clear_param("case")
+    _clear_param("law")
+    # 브라우저 히스토리 push 없이 세션만 바꿔, 새로고침으로 입력이 날아가지 않게 한다.
     st.rerun()
+
+
+def _do_leave_to_enter() -> None:
+    _vs_back_to_enter()
 
 
 @st.dialog("나가기")
@@ -1600,14 +1641,14 @@ def hub_screen() -> None:
             _svc_card(EXAM_TITLE, EXAM_DESC, "01")
             if st.button("시작하기", type="primary", key="hub_exam", use_container_width=True):
                 st.session_state.quiz_kind = "exam"
-                _goto_free("enter")
+                _goto("enter")
                 st.rerun()
     with r1b:
         with st.container(border=True):
             _svc_card("실무역량평가 OX", OX_DESC, "02")
             if st.button("시작하기", type="primary", key="hub_ox", use_container_width=True):
                 st.session_state.quiz_kind = "ox"
-                _goto_free("enter")
+                _goto("enter")
                 st.rerun()
     _sect("학습하기", "개인 학습·모의고사로 바로 이어집니다.")
     r_learn_a, r_learn_b = st.columns(2, gap="medium")
@@ -1891,7 +1932,7 @@ def _cached_amend(oc: str, mst: str) -> dict[str, str]:
 
 def enter_screen() -> None:
     if st.button("← 홈으로", key="enter_back_hub", use_container_width=True):
-        _goto_free("hub")
+        _goto("hub")
         st.rerun()
         return
     kind = "실무역량평가 OX" if st.session_state.get("quiz_kind") == "ox" else EXAM_TITLE
@@ -1921,7 +1962,7 @@ def enter_screen() -> None:
         else:
             st.session_state.my_org = org
             st.session_state.host_draft = {"org": org, "name": name}
-            _goto_free("host_setup")
+            _goto("host_setup")
             st.rerun()
     if join:
         if not name or not code:
@@ -1970,8 +2011,7 @@ def host_setup_screen() -> None:
     org = draft.get("org") or {}
     name = draft.get("name") or ""
     if not name:
-        _goto_free("enter")
-        st.rerun()
+        _vs_back_to_enter()
         return
     kind = "ox" if st.session_state.get("quiz_kind") == "ox" else "exam"
     st.caption(path_text(org))
@@ -2017,9 +2057,8 @@ def host_setup_screen() -> None:
         st.caption(glue_kr("설명이 맞으면 O, 틀리면 X입니다. 몇 개인지 묻는 문제는 숫자를 넣습니다."))
 
     open_room = st.button("이 설정으로 방 열기", type="primary", use_container_width=True)
-    if st.button("뒤로", key="setup_back", use_container_width=True):
-        _goto_free("enter")
-        st.rerun()
+    if st.button("← 뒤로가기", key="setup_back", use_container_width=True):
+        _vs_back_to_enter()
     if open_room:
         seed = random.randint(1, 10_000_000)
         try:
@@ -2147,8 +2186,8 @@ def lobby_screen() -> None:
     st.markdown('<div class="mini-mark"></div>', unsafe_allow_html=True)
     b1, _ = st.columns([1, 4])
     with b1:
-        if st.button("나가기", key="lobby_leave"):
-            _do_leave_to_enter()
+        if st.button("← 뒤로가기", key="lobby_back", use_container_width=True):
+            _vs_back_to_enter()
     _law_brief()
 
 
