@@ -648,7 +648,11 @@ def _cookie_gate_on() -> bool:
 def _gate_js(script: str) -> None:
     import streamlit.components.v1 as components
 
-    components.html(f"<script>(function(){{\n{script}\n}})();</script>", height=0)
+    components.html(
+        f"<script>(function(){{\n{script}\n}})();</script>",
+        height=0,
+        width=0,
+    )
 
 
 # 브라우저 뒤로가기용. hub↔판례·개정·입장만 허용. 시합(lobby/play)은 잠금.
@@ -656,55 +660,112 @@ VIEW_FREE = frozenset({"hub", "cases", "laws", "enter", "host_setup"})
 VIEW_LOCK = frozenset({"lobby", "play"})
 
 
+def _nav_bootstrap_js() -> None:
+    """popstate: 시합 중이면 잠금, 아니면 URL 반영을 위해 새로고침."""
+    _gate_js(
+        """
+        var w = window.parent;
+        try { if (window.top && window.top.location && window.top.location.href) w = window.top; } catch (e) {}
+        if (w.__battleNavBoot) return;
+        w.__battleNavBoot = true;
+        w.__battleLockOn = false;
+        w.__battleLockView = "play";
+        w.addEventListener("popstate", function () {
+          if (w.__battleLockOn) {
+            try {
+              var u = new URL(w.location.href);
+              u.searchParams.set("view", w.__battleLockView || "play");
+              w.history.pushState({battleLock: 1}, "", u.toString());
+            } catch (e) {}
+            return;
+          }
+          try { w.location.replace(w.location.href); } catch (e) {}
+        });
+        """
+    )
+
+
+def _flush_history_push() -> None:
+    """버튼→_goto→rerun 때 JS가 유실되므로, 다음 화면에서 히스토리를 심는다."""
+    hist = st.session_state.pop("_hist_pair", None)
+    if not hist:
+        return
+    fr, to = hist
+    fr = (fr or "hub").strip()
+    to = (to or "").strip()
+    if not to or fr == to or to not in VIEW_FREE:
+        return
+    if fr not in VIEW_FREE:
+        fr = "hub"
+    _gate_js(
+        f"""
+        var w = window.parent;
+        try {{ if (window.top && window.top.location && window.top.location.href) w = window.top; }} catch (e) {{}}
+        try {{
+          var toU = new URL(w.location.href);
+          toU.searchParams.set("view", "{to}");
+          var frU = new URL(w.location.href);
+          frU.searchParams.set("view", "{fr}");
+          w.history.replaceState({{battleView: "{fr}"}}, "", frU.toString());
+          w.history.pushState({{battleView: "{to}"}}, "", toU.toString());
+          w.__battleLockOn = false;
+        }} catch (e) {{}}
+        """
+    )
+
+
 def _goto(phase: str) -> None:
-    """화면 전환 + URL view 동기화 (브라우저 뒤로가기용)."""
+    """화면 전환. 히스토리는 다음 렌더의 _flush_history_push에서 넣는다."""
+    cur = str(st.query_params.get("view") or st.session_state.get("phase") or "hub").strip()
     st.session_state.phase = phase
-    if phase != "gate":
-        st.query_params["view"] = phase
+    if phase == "gate":
+        return
+    st.query_params["view"] = phase
+    if phase in VIEW_FREE:
+        st.session_state._hist_pair = (cur if cur in VIEW_FREE else "hub", phase)
+    else:
+        st.session_state.pop("_hist_pair", None)
 
 
 def _lock_browser_back(on: bool) -> None:
-    """시합 중 브라우저 뒤로가기를 막거나 푼다. 판례·개정 등 일반 화면에서는 반드시 끈다."""
-    was = bool(st.session_state.get("_back_locked"))
+    """시합 중 뒤로가기 잠금 플래그."""
     st.session_state._back_locked = on
+    phase = st.session_state.get("phase") or "play"
     if on:
-        if was:
-            _gate_js("window.parent.__battleLockOn = true;")
-            return
+        _gate_js(
+            f"""
+            var w = window.parent;
+            try {{ if (window.top && window.top.location && window.top.location.href) w = window.top; }} catch (e) {{}}
+            w.__battleLockOn = true;
+            w.__battleLockView = "{phase}";
+            """
+        )
+    else:
         _gate_js(
             """
             var w = window.parent;
-            w.__battleLockOn = true;
-            if (!w.__battleLockBound) {
-              w.__battleLockBound = true;
-              w.addEventListener("popstate", function () {
-                if (!w.__battleLockOn) return;
-                try { w.history.pushState({battleLock:1}, "", w.location.href); } catch (e) {}
-              });
-              try { w.history.pushState({battleLock:1}, "", w.location.href); } catch (e) {}
-            }
+            try { if (window.top && window.top.location && window.top.location.href) w = window.top; } catch (e) {}
+            w.__battleLockOn = false;
             """
         )
-        return
-    # 일반 화면: 잠금 해제 (시합에서 나온 뒤에도 판례·개정 뒤로가기 가능)
-    _gate_js("try { window.parent.__battleLockOn = false; } catch (e) {}")
 
 
 def _apply_browser_nav() -> None:
-    """URL ?view= 를 기준으로 화면을 맞춘다. 시합 중에만 뒤로가기를 잠근다."""
+    """URL ?view= 기준 화면 동기화 + 히스토리/잠금."""
+    _nav_bootstrap_js()
+    _flush_history_push()
+
     phase = st.session_state.get("phase") or "hub"
     if phase == "gate":
         return
     view = str(st.query_params.get("view") or "").strip()
 
-    # 시합(대기·풀이): URL을 시합으로 고정 + 뒤로가기 잠금
     if phase in VIEW_LOCK:
         if view != phase:
             st.query_params["view"] = phase
         _lock_browser_back(True)
         return
 
-    # 판례·개정·홈·입장 등: 잠금 해제. URL이 있으면 URL이 우선 (뒤로가기 반영)
     _lock_browser_back(False)
 
     if view in VIEW_FREE:
@@ -715,16 +776,15 @@ def _apply_browser_nav() -> None:
                 _clear_param("room")
         return
 
-    # view 없음 = 뒤로가기로 우리 기록이 사라진 경우 → 홈으로 (다시 view=cases 로 덮지 않음)
     if phase in VIEW_FREE and phase != "hub":
         st.session_state.phase = "hub"
         st.session_state.pop("code", None)
         _clear_param("room")
         return
 
-    # 홈 첫 진입 등: view 없을 때만 hub 표시
     if phase == "hub" and not view:
         st.query_params["view"] = "hub"
+
 
 def _do_leave_to_enter() -> None:
     _lock_browser_back(False)
