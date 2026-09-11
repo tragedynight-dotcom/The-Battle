@@ -75,8 +75,8 @@ def _inject_home_screen_icons() -> None:
         f"""
         <link rel="apple-touch-icon" sizes="180x180" href="{href}">
         <link rel="icon" type="image/png" sizes="192x192" href="{href}">
-        <meta name="apple-mobile-web-app-title" content="The Battle">
-        <meta name="application-name" content="The Battle">
+        <meta name="apple-mobile-web-app-title" content="실무역량평가 TheBattle">
+        <meta name="application-name" content="실무역량평가 TheBattle">
         """,
         unsafe_allow_html=True,
     )

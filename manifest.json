@@ -1,7 +1,7 @@
 {
   "id": "/The-Battle/",
-  "name": "실무역량 평가 다통과 : The Battle",
-  "short_name": "The Battle",
+  "name": "실무역량평가 TheBattle",
+  "short_name": "실무역량평가 TheBattle",
   "lang": "ko",
   "start_url": "./index.html",
   "scope": "./",
