@@ -173,13 +173,19 @@ def _silent_b64() -> str:
 
 
 def _play_js(b64: str, *, offset: float | None = None) -> str:
-    """현재 창 Web Audio 재생. 공유 Audio pause를 쓰지 않아 소리가 덜 씹힌다."""
+    """앱 창(parent)에서 Web Audio 재생. components iframe이 아니라 본문에서 울린다."""
     off = "null" if offset is None else str(float(offset))
     silent = _silent_b64()
     return f"""
 <script>
 (function () {{
-  var w = window;
+  function appWin() {{
+    try {{
+      if (window.parent && window.parent.document && window.parent.document.body) return window.parent;
+    }} catch (e) {{}}
+    return window;
+  }}
+  var w = appWin();
   function unlock() {{
     try {{
       var Ctx = w.AudioContext || w.webkitAudioContext;
@@ -200,9 +206,11 @@ def _play_js(b64: str, *, offset: float | None = None) -> str:
   }}
   if (!w.__tbUnlockBound) {{
     w.__tbUnlockBound = true;
-    w.document.addEventListener("touchstart", unlock, {{ capture: true, passive: true }});
-    w.document.addEventListener("pointerdown", unlock, {{ capture: true, passive: true }});
-    w.document.addEventListener("click", unlock, {{ capture: true, passive: true }});
+    try {{
+      w.document.addEventListener("touchstart", unlock, {{ capture: true, passive: true }});
+      w.document.addEventListener("pointerdown", unlock, {{ capture: true, passive: true }});
+      w.document.addEventListener("click", unlock, {{ capture: true, passive: true }});
+    }} catch (e) {{}}
   }}
   unlock();
   function viaTag(data, offset) {{
@@ -306,7 +314,13 @@ def cue(ok: bool, streak: int, kind: str, token: str) -> None:
   var burstN = {int(burst_n)};
   var lifeMs = {int(life_ms)};
   var b64 = {b64!r};
-  var w = window;
+  function appWin() {{
+    try {{
+      if (window.parent && window.parent.document && window.parent.document.body) return window.parent;
+    }} catch (e) {{}}
+    return window;
+  }}
+  var w = appWin();
   var doc = w.document;
 
   function unlock() {{

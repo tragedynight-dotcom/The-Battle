@@ -598,7 +598,25 @@ st.markdown(
     [data-testid="stTextInput"] [data-baseweb="base-input"],
     [data-testid="stTextInput"] [data-baseweb="input"] {direction:ltr !important; flex-direction:row !important;}
 
-    /* ── 연속 정답 이펙트(직접 그린 CSS, 상용 이미지 없음) ── */
+    /* ── 연속 정답 이펙트(마크다운 폴백, 문제 가리지 않게) ── */
+    .fx-toast {position:fixed; left:50%; top:12px; transform:translateX(-50%); z-index:99999;
+      pointer-events:none; font-weight:800; font-size:.95rem; letter-spacing:-.02em;
+      padding:8px 16px; border-radius:999px; box-shadow:0 4px 14px rgba(0,0,0,.16);
+      animation:fxToastIn .7s ease-out forwards;}
+    .fx-toast.ok {background:rgba(16,185,129,.94); color:#ecfdf5;}
+    .fx-toast.miss {background:rgba(163,59,50,.92); color:#fdeceb;}
+    .fx-combo {position:fixed; left:50%; top:18%; transform:translate(-50%,-50%); z-index:99999;
+      pointer-events:none; text-align:center; animation:fxComboIn 1.15s ease-out forwards;}
+    .fx-combo b {display:block; font-size:clamp(1.7rem, 6vw, 2.4rem); font-weight:800; color:#c9a227;
+      text-shadow:0 4px 18px rgba(0,0,0,.2);}
+    .fx-combo span {display:block; margin-top:4px; color:var(--navy); font-weight:700; font-size:.95rem;}
+    .fx-combo.big b {font-size:clamp(2rem, 7vw, 2.8rem); color:#e2553d;}
+    @keyframes fxToastIn {0%{opacity:0; transform:translateX(-50%) translateY(-8px);}
+      15%{opacity:1; transform:translateX(-50%) translateY(0);} 75%{opacity:1;}
+      100%{opacity:0; transform:translateX(-50%) translateY(-4px);}}
+    @keyframes fxComboIn {0%{opacity:0; transform:translate(-50%,-40%) scale(.85);}
+      18%{opacity:1; transform:translate(-50%,-50%) scale(1.05);} 70%{opacity:1;}
+      100%{opacity:0; transform:translate(-50%,-58%) scale(1);}}
     .fx-layer {position:fixed; inset:0; pointer-events:none; z-index:90; overflow:hidden;}
     .fx-flash {position:absolute; inset:0; background:radial-gradient(ellipse at 50% 32%,
       rgba(232,208,145,.34), transparent 58%); animation:fxFlash 1.05s ease-out forwards;}
@@ -643,12 +661,12 @@ st.markdown(
       40%{transform:translateX(4px) rotate(1deg);} 60%{transform:translateX(-3px);} 100%{transform:translateX(0);}}
     .hud .chip.hot {animation:hotPulse .55s ease;}
     @keyframes hotPulse {0%{transform:scale(1);} 40%{transform:scale(1.14);} 100%{transform:scale(1);}}
-    .result-banner {border-radius:16px; padding:18px 16px; margin:0 0 14px 0; text-align:center;
-      border:1px solid var(--line); box-shadow:var(--sh);}
-    .result-banner.win {background:linear-gradient(180deg,#eef9f1,#fff); border-color:#b7e0c4;}
+    .result-banner {border-radius:16px; padding:22px 16px; margin:0 0 14px 0; text-align:center;
+      border:2px solid var(--line); box-shadow:var(--sh);}
+    .result-banner.win {background:linear-gradient(180deg,#e7f7ec,#fff); border-color:#7dcc96;}
     .result-banner.lose {background:linear-gradient(180deg,#fbf0ef,#fff); border-color:#e5c4c0;}
     .result-banner.draw {background:linear-gradient(180deg,#f4f6f9,#fff); border-color:#d5deea;}
-    .result-banner b {display:block; font-size:1.85rem; font-weight:800; letter-spacing:-.03em; color:var(--ink);}
+    .result-banner b {display:block; font-size:2.1rem; font-weight:800; letter-spacing:-.03em; color:var(--ink);}
     .result-banner.win b {color:#1f7a45;}
     .result-banner.lose b {color:#a33b32;}
     .result-banner.draw b {color:#3b4658;}
@@ -2508,6 +2526,19 @@ def _show_fx() -> None:
     n = int((fx or {}).get("streak") or 0) if fx else 0
     kind = str(pending[0]) if pending else ("ok" if ok else "miss")
     tok = str(pending[1]) if pending else f"fx-{int(st.session_state.get('_sfx_n') or 0)}-{n}-{kind}"
+    # 마크다운 폴백: components iframe 안이 아니라 본문에 바로 그려 항상 보이게
+    if fx is not None:
+        if ok and n < 2:
+            st.markdown("<div class='fx-toast ok'>정답</div>", unsafe_allow_html=True)
+        elif ok:
+            cls = "fx-combo big" if n >= 5 else "fx-combo"
+            note = "대폭발 콤보" if n >= 8 else ("콤보가 터졌습니다" if n >= 5 else ("연속 정답" if n >= 3 else "콤보 시작"))
+            st.markdown(
+                f"<div class='{cls}'><b>{n}연속!</b><span>{html.escape(note)}</span></div>",
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown("<div class='fx-toast miss'>아쉽</div>", unsafe_allow_html=True)
     try:
         if fx is not None:
             sfx.cue(ok, n, kind, tok)
@@ -2515,6 +2546,14 @@ def _show_fx() -> None:
             sfx.play(kind, tok)
     except Exception:
         pass
+
+
+def _result_banner(grade: str, title: str, note: str) -> None:
+    st.markdown(
+        f"<div class='result-banner {html.escape(grade)}'><b>{html.escape(title)}</b>"
+        f"<span>{html.escape(note)}</span></div>",
+        unsafe_allow_html=True,
+    )
 
 
 def _match_outcome(room: dict, pid: str) -> tuple[str, str, str]:
@@ -2561,13 +2600,10 @@ def done_screen(room: dict, pid: str, deck: list[dict], total: int) -> None:
             sfx.play({"win": "win", "lose": "lose", "draw": "draw"}.get(grade, "done"), tok)
         except Exception:
             pass
-        st.markdown(
-            f"<div class='result-banner {grade}'><b>{html.escape(title)}</b>"
-            f"<span>{html.escape(note)}</span></div>",
-            unsafe_allow_html=True,
-        )
+        _result_banner(grade, title, note)
     else:
         sfx.play("done", f"{code}-{room.get('round') or 1}-done-{pid}")
+        st.info("우리 쪽은 끝났습니다. 상대가 끝나면 승패가 확정됩니다.")
     if mode == "survival" and me.get("out"):
         st.error(f"탈락. {int(me.get('score') or 0)}문제까지 살아남았습니다.")
     else:
@@ -2584,11 +2620,7 @@ def done_screen(room: dict, pid: str, deck: list[dict], total: int) -> None:
         finished = all(p.get("done") for p in live["players"].values()) or live.get("status") == "done"
         if finished:
             g, t, n = _match_outcome(live, pid)
-            st.markdown(
-                f"<div class='result-banner {g}'><b>{html.escape(t)}</b>"
-                f"<span>{html.escape(n)}</span></div>",
-                unsafe_allow_html=True,
-            )
+            _result_banner(g, t, n)
         show_ranking(live, pid, "최종 순위" if finished else "실시간 순위")
         if finished:
             me_live = (live.get("players") or {}).get(pid) or {}
@@ -2681,9 +2713,12 @@ def play_relay(room: dict, pid: str, deck: list[dict], total: int) -> None:
                 if live is None:
                     return
                 if live.get("status") == "done":
+                    g, t, n = _match_outcome(live, pid)
+                    _result_banner(g, t, n)
                     st.rerun()
                     return
                 show_ranking(live, pid, "실시간 순위")
+                st.caption("상대 팀이 끝나면 위에 승패가 크게 표시됩니다.")
 
             wait_other()
         if st.button("나가기", key="leave_relay_wait", use_container_width=True):
