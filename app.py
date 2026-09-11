@@ -655,6 +655,9 @@ def _app_href(view: str, *, keep_room: bool = False, **extra: str) -> str:
     pid = _qp_one("pid") or str(st.session_state.get("pid") or "").strip()
     if pid:
         q["pid"] = pid
+    kind = str(extra.pop("kind", "") or st.session_state.get("quiz_kind") or "").strip()
+    if kind in ("exam", "ox"):
+        q["kind"] = kind
     if keep_room:
         room = _qp_one("room") or str(st.session_state.get("code") or "").strip()
         if room:
@@ -681,7 +684,6 @@ def _push_history(href: str) -> None:
           }}
         }} catch (e) {{}}
         try {{
-          // 목록/홈으로 올 때 상세 스택 키 제거 → 다음 요지 열기에서 다시 쌓임
           try {{
             var rm = [];
             for (var i = 0; i < app.sessionStorage.length; i++) {{
@@ -692,24 +694,22 @@ def _push_history(href: str) -> None:
           }} catch (e) {{}}
           var next = app.location.pathname + "{href}";
           if ((app.location.pathname + app.location.search) !== next) {{
-            app.history.pushState({{battleNav: 1}}, "", next);
+            app.history.pushState({{battleNav: "free"}}, "", next);
           }}
           try {{
             if (window.top && window.top !== app) {{
-              window.top.history.replaceState({{battleNav: 1}}, "", window.top.location.pathname + "{href}");
+              window.top.history.replaceState({{battleNav: "free"}}, "", window.top.location.pathname + "{href}");
             }}
           }} catch (e) {{}}
-          if (!app.__battlePopV5) {{
-            app.__battlePopV5 = true;
-            try {{
-              var s = app.document.createElement("script");
-              s.textContent = "(function(){{ if (window.__battlePopV5Fn) return; window.__battlePopV5Fn = true; window.addEventListener('popstate', function(){{ try {{ var q = location.search || ''; if (window.top && window.top !== window) {{ window.top.location.replace(window.top.location.pathname + q); return; }} }} catch (e) {{}} try {{ location.reload(); }} catch (e) {{}} }}); }})();";
-              app.document.documentElement.appendChild(s);
-            }} catch (e) {{}}
-          }}
         }} catch (e) {{}}
         """
     )
+
+
+def _goto_free(phase: str) -> None:
+    """홈·입장·방설정 등. 히스토리를 쌓아 브라우저 뒤로가기가 되게 한다."""
+    _goto(phase)
+    _push_history(_app_href(phase))
 
 
 def _stack_detail_history(*, list_href: str, detail_href: str) -> None:
@@ -843,6 +843,7 @@ def _apply_browser_nav() -> None:
         _clear_param("law")
         st.session_state.case_open = ""
         st.session_state.law_open = ""
+    game_lock = "true" if (phase_early in VIEW_LOCK or view_early in VIEW_LOCK) else "false"
     # JS에 직접 넘겨 주소 반영 전에도 목록→상세 스택을 쌓는다.
     _gate_js(
         f"""
@@ -857,11 +858,11 @@ def _apply_browser_nav() -> None:
         }} catch (e) {{}}
         try {{ app.__battleLockOn = false; app.__battleNavBoot = false; }} catch (e) {{}}
         try {{
-          // 리스너를 앱 문서에 직접 심어 srcdoc 샌드박스가 top 이동을 막지 않게 한다.
-          if (app && app.document && !app.__battlePopV5) {{
-            app.__battlePopV5 = true;
+          app.__battleGameLock = {game_lock};
+          if (app && app.document && !app.__battlePopV6) {{
+            app.__battlePopV6 = true;
             var s = app.document.createElement("script");
-            s.textContent = "(function(){{ if (window.__battlePopV5Fn) return; window.__battlePopV5Fn = true; window.addEventListener('popstate', function(){{ try {{ var q = location.search || ''; if (window.top && window.top !== window) {{ window.top.location.replace(window.top.location.pathname + q); return; }} }} catch (e) {{}} try {{ location.reload(); }} catch (e) {{}} }}); }})();";
+            s.textContent = "(function(){{ if (window.__battlePopV6Fn) return; window.__battlePopV6Fn = true; window.addEventListener('popstate', function(){{ try {{ if (window.__battleGameLock) {{ location.reload(); return; }} var q = location.search || ''; if (window.top && window.top !== window && window.top.location.search !== q) {{ window.top.location.replace(window.top.location.pathname + q); return; }} }} catch (e) {{}} try {{ location.reload(); }} catch (e) {{}} }}); }})();";
             app.document.documentElement.appendChild(s);
           }}
           if (app && app.location) {{
@@ -1502,6 +1503,30 @@ def _go_room(room: dict) -> None:
     st.rerun()
 
 
+def _flush_pending_join() -> None:
+    """폼 위젯과 같은 실행에서 join/_go_room 하지 않는다 (Streamlit 위젯 오류 방지)."""
+    pending = st.session_state.pop("_pending_join", None)
+    if not pending:
+        return
+    code = str(pending.get("code") or "").strip()
+    name = str(pending.get("name") or "").strip()
+    org = pending.get("org") or {}
+    try:
+        room = rooms.join(code, st.session_state.pid, name, org)
+    except Exception:
+        st.session_state._join_err_show = "입장에 실패했습니다. 잠시 뒤 다시 시도하십시오."
+        return
+    if room is None:
+        st.session_state._join_err_show = "방이 없습니다. 번호를 확인하십시오."
+        return
+    st.session_state.my_org = org
+    _clear_param("case")
+    _clear_param("law")
+    st.session_state.case_open = ""
+    st.session_state.law_open = ""
+    _go_room(room)
+
+
 def _org_caption(room: dict, pid: str) -> str:
     mine = rooms.player_org(room, pid)
     host = room.get("org") or {}
@@ -1565,14 +1590,14 @@ def hub_screen() -> None:
             _svc_card(EXAM_TITLE, EXAM_DESC, "01")
             if st.button("시작하기", type="primary", key="hub_exam", use_container_width=True):
                 st.session_state.quiz_kind = "exam"
-                _goto("enter")
+                _goto_free("enter")
                 st.rerun()
     with r1b:
         with st.container(border=True):
             _svc_card("실무역량평가 OX", OX_DESC, "02")
             if st.button("시작하기", type="primary", key="hub_ox", use_container_width=True):
                 st.session_state.quiz_kind = "ox"
-                _goto("enter")
+                _goto_free("enter")
                 st.rerun()
     _sect("학습하기", "개인 학습·모의고사로 바로 이어집니다.")
     r_learn_a, r_learn_b = st.columns(2, gap="medium")
@@ -1856,13 +1881,17 @@ def _cached_amend(oc: str, mst: str) -> dict[str, str]:
 
 def enter_screen() -> None:
     if st.button("← 홈으로", key="enter_back_hub", use_container_width=True):
-        _goto("hub")
+        _goto_free("hub")
         st.rerun()
         return
     kind = "실무역량평가 OX" if st.session_state.get("quiz_kind") == "ox" else EXAM_TITLE
     _sect(kind, "시도청·경찰서·지구대·파출소·팀을 고른 뒤, 방을 열거나 방 번호로 들어옵니다.")
     org = pick_org()
     st.caption(path_text(org) if org.get("unit") and org.get("team") else "위에서 관서와 팀을 고르십시오.")
+
+    err = st.session_state.pop("_join_err_show", None)
+    if err:
+        st.error(err)
 
     qcode = _qp_one("room")
     if qcode and not str(st.session_state.get("join_code") or "").strip():
@@ -1882,7 +1911,7 @@ def enter_screen() -> None:
         else:
             st.session_state.my_org = org
             st.session_state.host_draft = {"org": org, "name": name}
-            _goto("host_setup")
+            _goto_free("host_setup")
             st.rerun()
     if join:
         if not name or not code:
@@ -1890,18 +1919,9 @@ def enter_screen() -> None:
         elif not org.get("unit") or not org.get("team"):
             st.error("시도청·경찰서·지구대·팀을 고르십시오.")
         else:
-            room = rooms.join(code, st.session_state.pid, name, org)
-            if room is None:
-                st.error("방이 없습니다. 번호를 확인하십시오.")
-            else:
-                st.session_state.my_org = org
-                # player_name 은 위젯 key라 여기서 다시 넣으면 Streamlit 오류가 난다.
-                _persist_pid(st.session_state.pid)
-                _clear_param("case")
-                _clear_param("law")
-                st.session_state.case_open = ""
-                st.session_state.law_open = ""
-                _go_room(room)
+            # 다음 실행에서 join (폼 위젯과 같은 실행에서 session/query를 건드리면 오류)
+            st.session_state._pending_join = {"code": code, "name": name, "org": dict(org)}
+            st.rerun()
 
 
 def _topic_pick() -> tuple[str, int]:
@@ -1940,7 +1960,7 @@ def host_setup_screen() -> None:
     org = draft.get("org") or {}
     name = draft.get("name") or ""
     if not name:
-        _goto("enter")
+        _goto_free("enter")
         st.rerun()
         return
     kind = "ox" if st.session_state.get("quiz_kind") == "ox" else "exam"
@@ -1988,25 +2008,32 @@ def host_setup_screen() -> None:
 
     open_room = st.button("이 설정으로 방 열기", type="primary", use_container_width=True)
     if st.button("뒤로", key="setup_back", use_container_width=True):
-        _goto("enter")
+        _goto_free("enter")
         st.rerun()
     if open_room:
         seed = random.randint(1, 10_000_000)
-        deck, stored_id, shown = _build_deck(area_id, count, seed, kind)
-        if chance:
-            deck = _mark_chances(deck, seed)
-        room = rooms.create(
-            st.session_state.pid,
-            name,
-            stored_id,
-            shown,
-            len(deck),
-            deck,
-            org=org,
-            mode=mode,
-            team_battle=team_battle,
-            kind=kind,
-        )
+        try:
+            deck, stored_id, shown = _build_deck(area_id, count, seed, kind)
+            if chance:
+                deck = _mark_chances(deck, seed)
+            room = rooms.create(
+                st.session_state.pid,
+                name,
+                stored_id,
+                shown,
+                len(deck),
+                deck,
+                org=org,
+                mode=mode,
+                team_battle=team_battle,
+                kind=kind,
+            )
+        except Exception:
+            st.error("방을 열지 못했습니다. 잠시 뒤 다시 시도하십시오.")
+            return
+        if room is None:
+            st.error("방을 열지 못했습니다. 다시 시도하십시오.")
+            return
         st.session_state.host_seed = seed
         st.session_state.my_org = org
         _go_room(room)
@@ -2644,6 +2671,8 @@ def play_screen() -> None:
 
         live_board()
 
+
+_flush_pending_join()
 
 phase = st.session_state.phase
 if phase != "gate":
