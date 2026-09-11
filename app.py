@@ -689,6 +689,38 @@ def _push_history(href: str) -> None:
     )
 
 
+def _stack_detail_history(*, list_href: str, detail_href: str) -> None:
+    """목록 URL을 아래에 두고 상세를 push. Streamlit replaceState가 히스토리를 덮어도 복구한다."""
+    if not list_href.startswith("?"):
+        list_href = "?" + list_href
+    if not detail_href.startswith("?"):
+        detail_href = "?" + detail_href
+    _gate_js(
+        f"""
+        var w = window.parent;
+        try {{ if (window.top && window.top.location) w = window.top; }} catch (e) {{}}
+        try {{
+          if (!w.__battlePopBound) {{
+            w.__battlePopBound = true;
+            w.addEventListener("popstate", function () {{
+              try {{ w.location.replace(w.location.href); }} catch (e) {{}}
+            }});
+          }}
+          var path = w.location.pathname;
+          var listUrl = path + "{list_href}";
+          var detailUrl = path + "{detail_href}";
+          // Streamlit이 이미 상세 URL로 replace한 뒤에도, 목록→상세 두 칸으로 다시 쌓는다.
+          setTimeout(function () {{
+            try {{
+              w.history.replaceState({{battleNav: "list"}}, "", listUrl);
+              w.history.pushState({{battleNav: "detail"}}, "", detailUrl);
+            }} catch (e) {{}}
+          }}, 30);
+        }} catch (e) {{}}
+        """
+    )
+
+
 def _open_view(view: str, **extra: str) -> None:
     """같은 탭 버튼 이동. case/law는 URL에 넣어 뒤로가기 시 목록·홈으로 돌아간다."""
     st.session_state.phase = view
@@ -703,33 +735,42 @@ def _open_view(view: str, **extra: str) -> None:
         _clear_param("law")
         st.session_state.case_open = ""
         st.session_state.law_open = ""
-        extra = {}
-    elif view == "cases":
+        _push_history(_app_href("hub"))
+        return
+
+    if view == "cases":
         _clear_param("law")
         st.session_state.law_open = ""
         case_id = str(extra.get("case") or "").strip()
         st.session_state.case_open = case_id
         if case_id:
             st.query_params["case"] = case_id
-            extra = {"case": case_id}
+            _stack_detail_history(
+                list_href=_app_href("cases"),
+                detail_href=_app_href("cases", case=case_id),
+            )
         else:
             _clear_param("case")
-            extra = {}
-    elif view == "laws":
+            _push_history(_app_href("cases"))
+        return
+
+    if view == "laws":
         _clear_param("case")
         st.session_state.case_open = ""
         law_id = str(extra.get("law") or "").strip()
         st.session_state.law_open = law_id
         if law_id:
             st.query_params["law"] = law_id
-            extra = {"law": law_id}
+            _stack_detail_history(
+                list_href=_app_href("laws"),
+                detail_href=_app_href("laws", law=law_id),
+            )
         else:
             _clear_param("law")
-            extra = {}
-    else:
-        extra = {k: str(v) for k, v in extra.items() if v}
+            _push_history(_app_href("laws"))
+        return
 
-    _push_history(_app_href(view, **extra))
+    _push_history(_app_href(view, **{k: str(v) for k, v in extra.items() if v}))
 
 
 def _persist_pid(pid: str) -> None:
@@ -793,6 +834,12 @@ def _apply_browser_nav() -> None:
         try { if (window.top && window.top.location) w = window.top; } catch (e) {}
         w.__battleLockOn = false;
         w.__battleNavBoot = false;
+        if (!w.__battlePopBound) {
+          w.__battlePopBound = true;
+          w.addEventListener("popstate", function () {
+            try { w.location.replace(w.location.href); } catch (e) {}
+          });
+        }
         """
     )
 
@@ -1563,7 +1610,8 @@ def hub_screen() -> None:
 
 
 def cases_screen() -> None:
-    open_id = _qp_one("case") or st.session_state.get("case_open") or ""
+    # URL이 유일한 기준. 세션 fallback이면 뒤로가기로 case가 빠져도 요지가 남는다.
+    open_id = _qp_one("case")
     st.session_state.case_open = open_id
     if open_id:
         if st.button("← 목록으로", key="cases_back_list", use_container_width=True):
@@ -1649,7 +1697,8 @@ def cases_screen() -> None:
         )
 
 def laws_screen() -> None:
-    open_id = _qp_one("law") or st.session_state.get("law_open") or ""
+    # URL이 유일한 기준. 세션 fallback이면 뒤로가기로 law가 빠져도 개정이유가 남는다.
+    open_id = _qp_one("law")
     st.session_state.law_open = open_id
     if open_id:
         if st.button("← 목록으로", key="laws_back_list", use_container_width=True):
