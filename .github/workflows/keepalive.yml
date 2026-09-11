@@ -1,8 +1,8 @@
 # Streamlit Community Cloud는 한동안 접속이 없으면 잠긴다.
 # curl만으로는 안 깨어나므로, 6시간마다 브라우저로 한 번 연다.
 #
-# GitHub 저장소 Settings → Secrets → Actions 에
-# STREAMLIT_URL = https://(앱이름).streamlit.app  을 넣으십시오.
+# 기본 주소는 thebattle.streamlit.app 입니다.
+# 다른 주소로 쓰려면 Secrets에 STREAMLIT_URL 을 넣으면 됩니다.
 name: Streamlit 깨우기
 
 on:
@@ -26,5 +26,5 @@ jobs:
           python -m playwright install --with-deps chromium
       - name: 배포 주소 열기
         env:
-          STREAMLIT_URL: ${{ secrets.STREAMLIT_URL }}
+          STREAMLIT_URL: https://thebattle.streamlit.app
         run: python tools/keepalive.py
