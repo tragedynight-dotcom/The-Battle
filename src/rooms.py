@@ -388,6 +388,7 @@ def _empty_relay() -> dict:
     return {
         "asked": {},
         "last": {},
+        "side_streak": {SIDES[0]: 0, SIDES[1]: 0},
         "cursor": {SIDES[0]: 0, SIDES[1]: 0},
         "order": {SIDES[0]: [], SIDES[1]: []},
         "lanes": {SIDES[0]: _empty_lane(), SIDES[1]: _empty_lane()},
@@ -655,6 +656,25 @@ def _all_answered(p: dict, n: int) -> bool:
     return n > 0 and all(i in got for i in range(n))
 
 
+def side_streak_of(room: dict | None, side: str) -> int:
+    """단체전 팀 연속 정답. 타자가 바뀌어도 팀이 이어 맞히면 콤보가 쌓인다."""
+    if not room or side not in SIDES:
+        return 0
+    rel = room.get("relay") or {}
+    ss = rel.get("side_streak") or {}
+    return int(ss.get(side) or 0)
+
+
+def cheer_streak(room: dict | None, pid: str) -> int:
+    """화면·효과음용 연속 수. 단체전이면 팀 연속, 아니면 개인 연속."""
+    if not room or pid not in (room.get("players") or {}):
+        return 0
+    me = room["players"][pid]
+    if relay_on(room):
+        return side_streak_of(room, me.get("side") or "")
+    return int(me.get("streak") or 0)
+
+
 def _mark_answer(room: dict, pid: str, idx: int, choice: int, answer: int, ms: int, double: bool) -> tuple[bool, int]:
     p = room["players"][pid]
     mode = mode_of(room)
@@ -662,6 +682,12 @@ def _mark_answer(room: dict, pid: str, idx: int, choice: int, answer: int, ms: i
     streak = (int(p.get("streak") or 0) + 1) if ok else 0
     p["streak"] = streak
     p["best"] = max(int(p.get("best") or 0), streak)
+    if relay_on(room):
+        side = p.get("side") or ""
+        if side in SIDES:
+            rel = room.setdefault("relay", _empty_relay())
+            ss = rel.setdefault("side_streak", {SIDES[0]: 0, SIDES[1]: 0})
+            ss[side] = (int(ss.get(side) or 0) + 1) if ok else 0
     used = _spent_ms(p, ms)
     pts = _award(mode, ok, used, limit_sec(room), streak, bool(double))
     by = _history_map(p)

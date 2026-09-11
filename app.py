@@ -259,21 +259,13 @@ st.markdown(
         word-break:keep-all; overflow-wrap:break-word; line-break:strict;}
       .qbox .stem {word-break:keep-all; overflow-wrap:break-word; line-break:strict;}
       .codebox {font-size:clamp(2rem, 12vw, 2.6rem); padding:16px 12px;}
-      /* 폰: 버튼 글자 잘림·효과 과다 완화 */
+      /* 폰: 버튼 글자 잘림 완화 (이펙트는 유지) */
       div.stButton > button [data-testid="stMarkdownContainer"] p,
       div.stFormSubmitButton > button [data-testid="stMarkdownContainer"] p,
       div.stLinkButton > a [data-testid="stMarkdownContainer"] p {
         white-space:normal !important; overflow:visible !important; text-overflow:clip !important;
         font-size:clamp(.88rem, 3.6vw, .95rem) !important;}
       div.stLinkButton > a {white-space:normal !important;}
-      .fx-spark {display:none;}
-      .fx-ring {border-width:2px;}
-      .fx-pop b {font-size:1.55rem !important;}
-      .fx-pop.hot b, .fx-pop.big b {font-size:1.75rem !important;}
-      .fx-pop span {font-size:.9rem !important;}
-      .fx-flash {animation-duration:.65s;}
-      .fx-pop {animation-duration:.9s; top:22%;}
-      .fx-burst i {width:7px; height:7px;}
       .result-banner {padding:16px 14px; margin:0 0 12px 0;}
       .result-banner b {font-size:1.55rem;}
     }
@@ -2423,8 +2415,11 @@ def _hud(room: dict, me: dict, idx: int, total: int, pos: int, n_players: int, l
         f"<span class='chip'>맞힘<b>{int(me.get('score') or 0)}</b></span>",
     ]
     streak = int(me.get("streak") or 0)
+    if rooms.relay_on(room):
+        streak = rooms.side_streak_of(room, me.get("side") or "")
     if streak >= 2:
-        chips.append(f"<span class='chip hot'>{streak}연속</span>")
+        label = "팀연속" if rooms.relay_on(room) else "연속"
+        chips.append(f"<span class='chip hot'>{streak}{label}</span>")
     side = me.get("side") or ""
     if side:
         chips.append(f"<span class='chip'>{html.escape(side)}</span>")
@@ -2482,79 +2477,28 @@ def _react_answer(code: str, pid: str) -> None:
     me = (live.get("players") or {}).get(pid) or {}
     hist = me.get("history") or []
     ok = bool(hist[-1].get("ok")) if hist else False
-    _cheer(ok, int(me.get("streak") or 0))
-
-
-def _burst_bits(n: int) -> str:
-    """콤보 폭죽. CSS만으로 그린다(이미지·상용 이펙트 없음)."""
-    count = 8 if n < 3 else (12 if n < 5 else (16 if n < 8 else 22))
-    bits = []
-    for i in range(count):
-        ang = (360 / count) * i
-        dist = 70 + (i % 5) * 18
-        rad = math.radians(ang)
-        dx = int(dist * math.cos(rad))
-        dy = int(dist * math.sin(rad))
-        bits.append(f"<i style='--dx:{dx}px;--dy:{dy}px;--rot:{ang}deg'></i>")
-    return "<span class='fx-burst'>" + "".join(bits) + "</span>"
+    _cheer(ok, rooms.cheer_streak(live, pid))
 
 
 def _show_fx() -> None:
     fx = st.session_state.pop("_pending_fx", None)
     pending = st.session_state.pop("_pending_sfx", None)
+    tok = ""
     if pending:
+        tok = str(pending[1])
         try:
-            sfx.play(pending[0], pending[1])
+            sfx.play(pending[0], tok)
         except Exception:
             pass
     if not fx:
         return
     ok = bool(fx.get("ok"))
     n = int(fx.get("streak") or 0)
-    if ok:
-        cls = "fx-pop"
-        flash_cls = "fx-flash"
-        if n >= 5:
-            cls += " hot big"
-            flash_cls += " big"
-        elif n >= 2:
-            cls += " hot"
-            flash_cls += " hot"
-        title = f"{n}연속!" if n >= 2 else "맞힘"
-        if n >= 8:
-            note = "대폭발 콤보"
-        elif n >= 5:
-            note = "콤보가 터졌습니다"
-        elif n >= 3:
-            note = "연속 정답"
-        elif n >= 2:
-            note = "콤보 시작"
-        else:
-            note = "정답입니다"
-        sparks = "".join(
-            f"<i class='fx-spark' style='--dx:{dx}px;--dy:{dy}px'></i>"
-            for dx, dy in ((-70, -35), (75, -45), (0, -70), (-55, 50), (60, 55))
-        )
-        rings = "<i class='fx-ring'></i>"
-        if n >= 3:
-            rings += "<i class='fx-ring r2'></i>"
-        if n >= 5:
-            rings += "<i class='fx-ring r3'></i>"
-        burst = _burst_bits(n) if n >= 2 else ""
-        flash = f"<div class='{flash_cls}'></div>"
-    else:
-        cls = "fx-pop miss"
-        title = "아쉽"
-        note = "다음 문항에서 다시"
-        sparks = ""
-        rings = ""
-        burst = ""
-        flash = "<div class='fx-flash miss'></div>"
-    st.markdown(
-        f"<div class='fx-layer'>{flash}{rings}{sparks}{burst}"
-        f"<div class='{cls}'><b>{html.escape(title)}</b><span>{html.escape(note)}</span></div></div>",
-        unsafe_allow_html=True,
-    )
+    fx_tok = tok or f"fx-{int(st.session_state.get('_sfx_n') or 0)}-{n}-{'ok' if ok else 'miss'}"
+    try:
+        sfx.flash_fx(ok, n, fx_tok)
+    except Exception:
+        pass
 
 
 def _match_outcome(room: dict, pid: str) -> tuple[str, str, str]:
