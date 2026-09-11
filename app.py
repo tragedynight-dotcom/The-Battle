@@ -666,12 +666,52 @@ def _app_href(view: str, *, keep_room: bool = False, **extra: str) -> str:
 
 
 def _nav_link(label: str, href: str, *, primary: bool = False) -> None:
-    """앱 안 이동(학습하기 외부 링크 제외). target=_top → 같은 창 전체 이동 + 뒤로가기."""
-    cls = "battle-nav primary" if primary else "battle-nav"
-    st.markdown(
-        f'<div class="battle-nav-wrap"><a class="{cls}" href="{html.escape(href, quote=True)}" '
-        f'target="_top" rel="noopener">{html.escape(label)}</a></div>',
-        unsafe_allow_html=True,
+    """앱 안 이동. 마크다운 <a>는 Streamlit이 새 탭으로 바꿔서, top 창 location으로만 이동한다."""
+    import streamlit.components.v1 as components
+
+    bg = "#1c2430" if primary else "#ffffff"
+    fg = "#ffffff" if primary else "#1c2430"
+    border = "#1c2430" if primary else "rgba(28,36,48,.14)"
+    safe_href = html.escape(href, quote=True)
+    safe_label = html.escape(label)
+    nid = "n" + uuid.uuid4().hex[:12]
+    components.html(
+        f"""
+        <div style="margin:0;width:100%;box-sizing:border-box;">
+          <a id="{nid}" href="{safe_href}"
+             style="display:flex;align-items:center;justify-content:center;width:100%;
+                    min-height:2.8rem;padding:0.72rem 0.85rem;box-sizing:border-box;
+                    border-radius:11px;border:1px solid {border};background:{bg};color:{fg};
+                    font-weight:650;font-size:.95rem;text-decoration:none;line-height:1.35;
+                    word-break:keep-all;font-family:inherit;">
+            {safe_label}
+          </a>
+        </div>
+        <script>
+        (function(){{
+          var a = document.getElementById("{nid}");
+          if (!a) return;
+          a.addEventListener("click", function(e){{
+            e.preventDefault();
+            e.stopPropagation();
+            var w = window.parent;
+            try {{ if (window.top && window.top.location) w = window.top; }} catch (err) {{}}
+            var href = a.getAttribute("href") || "";
+            try {{
+              if (href.charAt(0) === "?") {{
+                w.location.assign(w.location.pathname + href);
+              }} else {{
+                w.location.assign(href);
+              }}
+            }} catch (err) {{
+              try {{ w.location.href = (href.charAt(0) === "?" ? w.location.pathname + href : href); }} catch (e2) {{}}
+            }}
+            return false;
+          }});
+        }})();
+        </script>
+        """,
+        height=56,
     )
 
 
