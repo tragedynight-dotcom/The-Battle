@@ -542,28 +542,62 @@ def _thin_side(room: dict) -> str:
     return min(SIDES, key=lambda s: tally[s])
 
 
-def join(code: str, pid: str, name: str, org: dict | None = None) -> dict | None:
+def join(code: str, pid: str, name: str, org: dict | None = None) -> tuple[dict | None, str]:
+    """방에 합류한다. 같은 별명·소속 자리가 있으면 그 id를 이어받는다. (room, 실제 pid)"""
     code = "".join(ch for ch in (code or "") if ch.isdigit())[:4]
-    if len(code) != 4 or not (pid or "").strip():
-        return None
+    pid = (pid or "").strip()
+    name = (name or "").strip()
+    if len(code) != 4 or not pid:
+        return None, pid
 
     def inner():
         room = _read(code)
         if room is None:
-            return None
-        if pid not in room["players"]:
+            return None, pid
+        use = resolve_pid(room, pid, name, org)
+        if use not in room["players"]:
             side = _thin_side(room) if room.get("team_battle") else ""
-            room["players"][pid] = _player(name, side, org)
+            room["players"][use] = _player(name, side, org)
         else:
-            room["players"][pid]["name"] = name
+            room["players"][use]["name"] = name or room["players"][use].get("name") or ""
             if org:
-                room["players"][pid]["org"] = dict(org)
-            if room.get("team_battle") and not room["players"][pid].get("side"):
-                room["players"][pid]["side"] = _thin_side(room)
+                room["players"][use]["org"] = dict(org)
+            if room.get("team_battle") and not room["players"][use].get("side"):
+                room["players"][use]["side"] = _thin_side(room)
         _write(room)
-        return room
+        return room, use
 
     return _with_lock(code, inner)
+
+
+def resolve_pid(room: dict | None, pid: str, name: str, org: dict | None = None) -> str:
+    """쿠키가 바뀌어도 같은 별명(+소속)이면 기존 참가 자리를 다시 잡는다."""
+    pid = (pid or "").strip()
+    players = (room or {}).get("players") or {}
+    if pid and pid in players:
+        return pid
+    want = (name or "").strip()
+    if not room or not want:
+        return pid
+    hits = [p for p, row in players.items() if (row.get("name") or "").strip() == want]
+    if not hits:
+        return pid
+    if len(hits) == 1:
+        return hits[0]
+    key = org_key(org)
+    keyed = [p for p in hits if org_key(player_org(room, p, players.get(p))) == key] if key else []
+    pool = keyed if keyed else []
+    if len(pool) == 1:
+        return pool[0]
+    if len(pool) > 1:
+        lanes = ((room.get("relay") or {}).get("lanes") or {})
+        for s in SIDES:
+            bat = (lanes.get(s) or {}).get("pid") or ""
+            if bat in pool:
+                return bat
+        return pool[0]
+    # 동명이인·소속 불명이면 새 자리
+    return pid
 
 
 def start(code: str, host_id: str) -> dict | None:

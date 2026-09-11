@@ -1561,26 +1561,33 @@ def _flush_pending_join() -> None:
     if len(code) != 4 or not name:
         st.session_state._join_err_show = "별명과 방 번호 4자리를 확인하십시오."
         return
-    # 주소에 붙은 다른 사람 pid로 들어왔으면 새 신원으로 합류
+    pid = str(st.session_state.get("pid") or "").strip() or uuid.uuid4().hex[:10]
     existing = rooms.load(code)
     if existing:
-        me = (existing.get("players") or {}).get(st.session_state.pid) or {}
+        me = (existing.get("players") or {}).get(pid) or {}
+        # 이 기기 id가 다른 별명 자리면 새 id로 바꾼 뒤, 같은 별명 자리를 이어받는다
         if me and (me.get("name") or "").strip() and (me.get("name") or "").strip() != name:
-            st.session_state.pid = uuid.uuid4().hex[:10]
+            pid = uuid.uuid4().hex[:10]
+        claimed = rooms.resolve_pid(existing, pid, name, org)
+        if claimed != pid:
+            pid = claimed
+            st.session_state._reclaimed_seat = True
+    st.session_state.pid = pid
     try:
-        room = rooms.join(code, st.session_state.pid, name, org)
+        room, pid = rooms.join(code, pid, name, org)
     except Exception:
         st.session_state._join_err_show = "입장에 실패했습니다. 잠시 뒤 다시 시도하십시오."
         return
     if room is None:
         st.session_state._join_err_show = "방이 없습니다. 번호를 확인하십시오."
         return
+    st.session_state.pid = pid
     st.session_state.my_org = org
     _clear_param("case")
     _clear_param("law")
     st.session_state.case_open = ""
     st.session_state.law_open = ""
-    _persist_pid(st.session_state.pid)
+    _persist_pid(pid)
     _go_room(room)
 
 
@@ -2122,8 +2129,15 @@ def lobby_screen() -> None:
         return
     pid = st.session_state.pid
     _persist_pid(pid)
-    if st.session_state.pop("_rejoined", False):
+    if st.session_state.pop("_rejoined", False) or st.session_state.pop("_reclaimed_seat", False):
         st.info("연결이 끊겼다가 같은 방으로 다시 들어왔습니다.")
+    if pid not in room["players"]:
+        name = (st.session_state.get("player_name") or "").strip() or "참가"
+        org = st.session_state.get("my_org") or {}
+        room2, pid = rooms.join(code, pid, name, org)
+        st.session_state.pid = pid
+        _persist_pid(pid)
+        room = room2 or rooms.load(code) or room
     mode = rooms.mode_of(room)
     lim = rooms.limit_sec(room)
     st.caption(_org_caption(room, pid))
@@ -2587,17 +2601,25 @@ def play_screen() -> None:
     room = rooms.begin_if_due(code) or room
     pid = st.session_state.pid
     _persist_pid(pid)
-    if st.session_state.pop("_rejoined", False):
-        st.info("연결이 끊겼다가 같은 방으로 다시 들어왔습니다. 이전 답안을 이어서 푸시면 됩니다.")
+    was_rejoin = st.session_state.pop("_rejoined", False)
+    was_reclaim = st.session_state.pop("_reclaimed_seat", False)
     if pid not in room["players"]:
-        st.warning("이 기기의 참가 기록이 방에 없습니다. 같은 별명으로 다시 합류합니다. 이전 답안은 이어지지 않을 수 있습니다.")
-        rooms.join(
-            code,
-            pid,
-            (st.session_state.get("player_name") or "").strip() or "참가",
-            st.session_state.get("my_org") or {},
-        )
-        room = rooms.load(code) or room
+        name = (st.session_state.get("player_name") or "").strip() or "참가"
+        org = st.session_state.get("my_org") or {}
+        old_pid = pid
+        room2, pid = rooms.join(code, pid, name, org)
+        st.session_state.pid = pid
+        _persist_pid(pid)
+        room = room2 or rooms.load(code) or room
+        if pid not in (room.get("players") or {}):
+            st.warning("이 방에 참가 기록을 찾지 못했습니다. 별명·소속·방 번호를 확인해 다시 들어가 주십시오.")
+            if st.button("입장 화면으로", key="play_rejoin_fail"):
+                _vs_back_to_enter()
+            return
+        if pid != old_pid:
+            was_reclaim = True
+    if was_rejoin or was_reclaim:
+        st.info("연결이 끊겼다가 같은 방으로 다시 들어왔습니다. 이전 답안을 이어서 푸시면 됩니다.")
     me = room["players"][pid]
     deck = room["deck"]
     total = len(deck)
