@@ -610,14 +610,13 @@ def _goto(phase: str) -> None:
 
 
 def _lock_browser_back(on: bool) -> None:
-    """시합 중 브라우저 뒤로가기를 막거나 푼다."""
+    """시합 중 브라우저 뒤로가기를 막거나 푼다. 판례·개정 등 일반 화면에서는 반드시 끈다."""
     was = bool(st.session_state.get("_back_locked"))
     st.session_state._back_locked = on
-    if on == was and on:
-        # 이미 잠금 중이면 플래그만 유지 (history 스팸 방지)
-        _gate_js("window.parent.__battleLockOn = true;")
-        return
     if on:
+        if was:
+            _gate_js("window.parent.__battleLockOn = true;")
+            return
         _gate_js(
             """
             var w = window.parent;
@@ -632,31 +631,46 @@ def _lock_browser_back(on: bool) -> None:
             }
             """
         )
-    else:
-        _gate_js("window.parent.__battleLockOn = false;")
+        return
+    # 일반 화면: 잠금 해제 (시합에서 나온 뒤에도 판례·개정 뒤로가기 가능)
+    _gate_js("try { window.parent.__battleLockOn = false; } catch (e) {}")
 
 
 def _apply_browser_nav() -> None:
-    """URL ?view= 과 phase를 맞춘다. 시합 중에는 뒤로가기를 무시·잠근다."""
+    """URL ?view= 를 기준으로 화면을 맞춘다. 시합 중에만 뒤로가기를 잠근다."""
     phase = st.session_state.get("phase") or "hub"
     if phase == "gate":
         return
     view = str(st.query_params.get("view") or "").strip()
+
+    # 시합(대기·풀이): URL을 시합으로 고정 + 뒤로가기 잠금
     if phase in VIEW_LOCK:
         if view != phase:
             st.query_params["view"] = phase
         _lock_browser_back(True)
         return
-    _lock_browser_back(False)
-    if view in VIEW_FREE and view != phase and phase in VIEW_FREE:
-        st.session_state.phase = view
-        if view == "hub":
-            st.session_state.pop("code", None)
-            _clear_param("room")
-        phase = view
-    if str(st.query_params.get("view") or "") != phase:
-        st.query_params["view"] = phase
 
+    # 판례·개정·홈·입장 등: 잠금 해제. URL이 있으면 URL이 우선 (뒤로가기 반영)
+    _lock_browser_back(False)
+
+    if view in VIEW_FREE:
+        if view != phase:
+            st.session_state.phase = view
+            if view == "hub":
+                st.session_state.pop("code", None)
+                _clear_param("room")
+        return
+
+    # view 없음 = 뒤로가기로 우리 기록이 사라진 경우 → 홈으로 (다시 view=cases 로 덮지 않음)
+    if phase in VIEW_FREE and phase != "hub":
+        st.session_state.phase = "hub"
+        st.session_state.pop("code", None)
+        _clear_param("room")
+        return
+
+    # 홈 첫 진입 등: view 없을 때만 hub 표시
+    if phase == "hub" and not view:
+        st.query_params["view"] = "hub"
 
 def _do_leave_to_enter() -> None:
     _lock_browser_back(False)
@@ -683,8 +697,20 @@ def _ask_leave_quiz() -> None:
 
 
 def _mark_gate() -> None:
-    """URL에 만료시각을 남겨 새로고침 후에도 출입이 유지되게 한다."""
-    st.query_params["in"] = str(int(time.time()) + GATE_TTL_SEC)
+    """URL에 만료시각을 남긴다. 매 클릭마다 바꾸면 뒤로가기가 막히므로, 없거나 임박할 때만 갱신."""
+    now = int(time.time())
+    raw = str(st.query_params.get("in") or "").strip()
+    need = True
+    if raw and raw != "1":
+        try:
+            exp = int(raw)
+            # 남은 시간이 절반 이상이면 URL을 건드리지 않는다 (히스토리 오염 방지)
+            if exp - now > GATE_TTL_SEC // 2:
+                need = False
+        except ValueError:
+            need = True
+    if need:
+        st.query_params["in"] = str(now + GATE_TTL_SEC)
     _gate_js(
         f"""
         var KEY = "{GATE_STORE}";
