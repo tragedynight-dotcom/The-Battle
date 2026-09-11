@@ -793,8 +793,11 @@ def _restore_player_from_room(room: dict, pid: str) -> None:
     me = (room.get("players") or {}).get(pid) or {}
     if not me:
         return
-    if not (st.session_state.get("player_name") or "").strip():
-        st.session_state.player_name = (me.get("name") or "").strip()
+    # 위젯 생성 전에만 별명 복구
+    if "player_name" not in st.session_state:
+        name = (me.get("name") or "").strip()
+        if name:
+            st.session_state.player_name = name
     if not st.session_state.get("my_org") and me.get("org"):
         st.session_state.my_org = dict(me.get("org") or {})
 
@@ -814,6 +817,11 @@ def _goto(phase: str) -> None:
         _clear_param("law")
         st.session_state.case_open = ""
         st.session_state.law_open = ""
+    elif phase in ("enter", "host_setup", "lobby", "play"):
+        _clear_param("case")
+        _clear_param("law")
+        st.session_state.case_open = ""
+        st.session_state.law_open = ""
     elif phase == "cases":
         _clear_param("law")
         st.session_state.law_open = ""
@@ -824,8 +832,17 @@ def _goto(phase: str) -> None:
 
 def _apply_browser_nav() -> None:
     """URL view/case/law/room 기준 복구. 시합 중 새로고침은 방으로 복귀."""
-    case_now = _qp_one("case") or str(st.session_state.get("case_open") or "").strip()
-    law_now = _qp_one("law") or str(st.session_state.get("law_open") or "").strip()
+    view_early = _qp_one("view")
+    phase_early = st.session_state.get("phase") or "hub"
+    # 판례·개정 화면에서만 상세 히스토리 스택 (입장/시합 중 case 잔여값 간섭 방지)
+    on_case_law = view_early in ("cases", "laws") or phase_early in ("cases", "laws")
+    case_now = (_qp_one("case") or str(st.session_state.get("case_open") or "").strip()) if on_case_law else ""
+    law_now = (_qp_one("law") or str(st.session_state.get("law_open") or "").strip()) if on_case_law else ""
+    if not on_case_law:
+        _clear_param("case")
+        _clear_param("law")
+        st.session_state.case_open = ""
+        st.session_state.law_open = ""
     # JS에 직접 넘겨 주소 반영 전에도 목록→상세 스택을 쌓는다.
     _gate_js(
         f"""
@@ -905,8 +922,8 @@ def _apply_browser_nav() -> None:
         if room and room.get("status") in ROOM_LIVE:
             players = room.get("players") or {}
             in_room = bool(pid and pid in players)
-            want_lock = view in VIEW_LOCK or phase in VIEW_LOCK or in_room
-            if want_lock and (in_room or phase in VIEW_LOCK or view in VIEW_LOCK):
+            # enter/hub/판례 등에서는 강제 복귀하지 않음 (다른 방 입장·홈 이동 가능)
+            if view not in VIEW_FREE and (in_room or phase in VIEW_LOCK or view in VIEW_LOCK):
                 rejoined = phase not in VIEW_LOCK
                 st.session_state.code = code
                 st.session_state.phase = "lobby" if room.get("status") == "lobby" else "play"
@@ -1847,10 +1864,12 @@ def enter_screen() -> None:
     org = pick_org()
     st.caption(path_text(org) if org.get("unit") and org.get("team") else "위에서 관서와 팀을 고르십시오.")
 
-    qcode = st.query_params.get("room", "")
+    qcode = _qp_one("room")
+    if qcode and not str(st.session_state.get("join_code") or "").strip():
+        st.session_state.join_code = qcode
     with st.form("enter_form", clear_on_submit=False):
         name = st.text_input("별명", placeholder="예: 순찰이", key="player_name")
-        join_code = st.text_input("방 번호", value=qcode, max_chars=4, placeholder="방장이 부른 4자리", key="join_code")
+        join_code = st.text_input("방 번호", max_chars=4, placeholder="방장이 부른 4자리", key="join_code")
         make = st.form_submit_button("방 만들기", type="primary", use_container_width=True)
         join = st.form_submit_button("방 번호로 들어가기", use_container_width=True)
     name = (name or "").strip()
@@ -1876,8 +1895,12 @@ def enter_screen() -> None:
                 st.error("방이 없습니다. 번호를 확인하십시오.")
             else:
                 st.session_state.my_org = org
-                st.session_state.player_name = name
+                # player_name 은 위젯 key라 여기서 다시 넣으면 Streamlit 오류가 난다.
                 _persist_pid(st.session_state.pid)
+                _clear_param("case")
+                _clear_param("law")
+                st.session_state.case_open = ""
+                st.session_state.law_open = ""
                 _go_room(room)
 
 
