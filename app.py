@@ -20,8 +20,8 @@ EXAM_TITLE = "실무역량평가(객관식)"
 EXAM_DESC = "객관식 문제로 개인전·단체전 등 여러 모드에서 겨룹니다."
 OX_DESC = "OX문제로 개인전·단체전 등 여러 모드에서 겨룹니다."
 
-# WORD JOINER — CSS keep-all이 Streamlit 버튼/삼성브라우저에서 무시될 때
-# "단계" → "단"+WJ+"계"로 묶어 음절 중간 줄바꿈을 막는다.
+# WORD JOINER — 텍스트 노드용. 버튼은 삼성 브라우저에서 무시되는 경우가 많아
+# 객관식 보기는 HTML <span class="nw"> 로 단어를 묶는다.
 _WJ = "\u2060"
 
 
@@ -46,6 +46,35 @@ def glue_kr(text: str) -> str:
     flush()
     return "".join(out)
 
+
+def glue_html(text: str) -> str:
+    """HTML용: 단어마다 nowrap span. Streamlit 버튼과 달리 줄바꿈이 확실히 지킨다."""
+    if not text:
+        return ""
+    out: list[str] = []
+    buf: list[str] = []
+
+    def flush() -> None:
+        if not buf:
+            return
+        tok = "".join(buf)
+        esc = html.escape(tok)
+        # 너무 긴 덩어리는 화면을 뚫지 않게 keep-all만 적용
+        cls = "nw" if len(tok) <= 28 else "kw"
+        out.append(f'<span class="{cls}">{esc}</span>')
+        buf.clear()
+
+    for ch in text:
+        if ch == "\n":
+            flush()
+            out.append("<br>")
+        elif ch.isspace() or ch in "·•|/｜,.;:!?()[]{}「」『』\"'“”‘’":
+            flush()
+            out.append(html.escape(ch) if not ch.isspace() else ch)
+        else:
+            buf.append(ch)
+    flush()
+    return "".join(out)
 
 st.set_page_config(page_title=APP_TITLE, page_icon="🛡️", layout="wide")
 st.markdown(
@@ -72,12 +101,37 @@ st.markdown(
     .stApp button, .stApp button *,
     .stApp a, .stApp a *,
     .qbox, .qbox *, .case-card, .case-card *, .brief, .brief *,
-    .ok, .bad, .svc, .svc *, .mast, .mast * {
+    .ok, .bad, .svc, .svc *, .mast, .mast *,
+    .choice-face, .choice-face *, .choice-txt, .choice-txt * {
       word-break: keep-all !important;
       line-break: strict !important;
       overflow-wrap: break-word !important;
       -webkit-line-break: after-white-space;
     }
+    /* 객관식: 단어 단위 nowrap (버튼 안 한글 쪼개짐 우회) */
+    .choice-face {
+      background:var(--card); border:1px solid var(--line); border-bottom:none;
+      border-radius:11px 11px 0 0; padding:12px 14px 8px; margin:0;
+      color:var(--ink); font-weight:650; font-size:.95rem; line-height:1.55;
+      box-shadow:none;}
+    .choice-face.sel {
+      border-color:var(--navy); background:#f4f6f9;}
+    .choice-face .nw, .choice-txt .nw, .qbox .nw, .stem .nw {
+      white-space:nowrap !important;}
+    .choice-face .kw, .choice-txt .kw, .qbox .kw, .stem .kw {
+      word-break:keep-all !important; line-break:strict !important; white-space:normal !important;}
+    /* 보기 본문 바로 아래 선택 버튼 — 카드 하단처럼 */
+    div[data-testid="stElementContainer"]:has(.choice-face) {
+      margin-bottom:0 !important; padding-bottom:0 !important;}
+    div[data-testid="stElementContainer"]:has(.choice-face) + div[data-testid="stElementContainer"] {
+      margin-top:0 !important; margin-bottom:8px !important;}
+    div[data-testid="stElementContainer"]:has(.choice-face) + div div.stButton > button {
+      border-top-left-radius:0 !important; border-top-right-radius:0 !important;
+      min-height:2.35rem !important; margin-top:0 !important;
+      justify-content:center !important;}
+    div[data-testid="stElementContainer"]:has(.choice-face) + div div.stButton > button
+      [data-testid="stMarkdownContainer"] p {
+      text-align:center !important; white-space:nowrap !important; font-size:.88rem !important;}
     .stApp {
       background:
         radial-gradient(800px 360px at 12% -8%, rgba(226,85,61,.07), transparent 55%),
@@ -1083,22 +1137,18 @@ def show_review(history: list | None, deck: list[dict]) -> None:
 def render_question(item: dict, qn: int, total: int, double: bool = False) -> None:
     tag = "<span class='x2tag'>찬스 문제 · 점수 2배</span>" if double else ""
     if item.get("ox"):
-        ask = html.escape(glue_kr(item.get("ask") or "아래 설명이 맞으면 O, 틀리면 X."))
-        ctx = html.escape(glue_kr(item.get("ctx") or "")).replace("\n", "<br>")
-        say = html.escape(glue_kr(item.get("q") or "")).replace("\n", "<br>")
+        ask = glue_html(item.get("ask") or "아래 설명이 맞으면 O, 틀리면 X.")
+        ctx = glue_html(item.get("ctx") or "")
+        say = glue_html(item.get("q") or "")
         body = f"<p class='ox-ask'>{ask}</p>"
-        if ctx:
+        if item.get("ctx"):
             body += f"<p class='ox-ctx'>{ctx}</p>"
         body += f"<p class='ox-say'>{say}</p>"
     else:
-        body = (
-            f"<div class='stem'>"
-            f"{html.escape(glue_kr(item['q'])).replace(chr(10), '<br>')}"
-            f"</div>"
-        )
+        body = f"<div class='stem'>{glue_html(item['q'])}</div>"
     st.markdown(
         f"<div class='qbox{' x2' if double else ''}'>"
-        f"<div class='meta'><span>{html.escape(glue_kr(item['area']))} · {qn}/{total}</span>{tag}</div>"
+        f"<div class='meta'><span>{glue_html(item['area'])} · {qn}/{total}</span>{tag}</div>"
         f"{body}</div>",
         unsafe_allow_html=True,
     )
@@ -1111,13 +1161,19 @@ def pick_choice(item: dict, key: str, selected: int | None = None) -> int | None
         for i, c in enumerate(item["choices"][:2]):
             with cols[i]:
                 kind = "primary" if selected is not None and i == selected else "secondary"
-                if st.button(glue_kr(c), key=f"{key}_{i}", type=kind):
+                if st.button(c, key=f"{key}_{i}", type=kind):
                     return i
         return None
+    # 보기 본문은 HTML(nowrap)로 그리고, 버튼은 짧은 '선택'만 — 버튼 안 한글 쪼개짐 방지
     st.markdown("<div class='choice-mark'></div>", unsafe_allow_html=True)
     for i, c in enumerate(item["choices"]):
         kind = "primary" if selected is not None and i == selected else "secondary"
-        if st.button(f"{circle(i)} {glue_kr(c)}", key=f"{key}_{i}", type=kind):
+        sel = " sel" if selected is not None and i == selected else ""
+        st.markdown(
+            f"<div class='choice-face{sel}'>{glue_html(f'{circle(i)} {c}')}</div>",
+            unsafe_allow_html=True,
+        )
+        if st.button(f"{circle(i)} 선택", key=f"{key}_{i}", type=kind, use_container_width=True):
             return i
     return None
 
