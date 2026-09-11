@@ -598,26 +598,8 @@ st.markdown(
     [data-testid="stTextInput"] [data-baseweb="base-input"],
     [data-testid="stTextInput"] [data-baseweb="input"] {direction:ltr !important; flex-direction:row !important;}
 
-    /* ── 연속 정답 이펙트(마크다운 폴백, 문제 가리지 않게) ── */
-    .fx-toast {position:fixed; left:50%; top:12px; transform:translateX(-50%); z-index:99999;
-      pointer-events:none; font-weight:800; font-size:.95rem; letter-spacing:-.02em;
-      padding:8px 16px; border-radius:999px; box-shadow:0 4px 14px rgba(0,0,0,.16);
-      animation:fxToastIn .7s ease-out forwards;}
-    .fx-toast.ok {background:rgba(16,185,129,.94); color:#ecfdf5;}
-    .fx-toast.miss {background:rgba(163,59,50,.92); color:#fdeceb;}
-    .fx-combo {position:fixed; left:50%; top:18%; transform:translate(-50%,-50%); z-index:99999;
-      pointer-events:none; text-align:center; animation:fxComboIn 1.15s ease-out forwards;}
-    .fx-combo b {display:block; font-size:clamp(1.7rem, 6vw, 2.4rem); font-weight:800; color:#c9a227;
-      text-shadow:0 4px 18px rgba(0,0,0,.2);}
-    .fx-combo span {display:block; margin-top:4px; color:var(--navy); font-weight:700; font-size:.95rem;}
-    .fx-combo.big b {font-size:clamp(2rem, 7vw, 2.8rem); color:#e2553d;}
-    @keyframes fxToastIn {0%{opacity:0; transform:translateX(-50%) translateY(-8px);}
-      15%{opacity:1; transform:translateX(-50%) translateY(0);} 75%{opacity:1;}
-      100%{opacity:0; transform:translateX(-50%) translateY(-4px);}}
-    @keyframes fxComboIn {0%{opacity:0; transform:translate(-50%,-40%) scale(.85);}
-      18%{opacity:1; transform:translate(-50%,-50%) scale(1.05);} 70%{opacity:1;}
-      100%{opacity:0; transform:translate(-50%,-58%) scale(1);}}
-    .fx-layer {position:fixed; inset:0; pointer-events:none; z-index:90; overflow:hidden;}
+    /* ── 연속 정답 이펙트(처음 버전: 플래시·링·폭죽) ── */
+    .fx-layer {position:fixed; inset:0; pointer-events:none; z-index:99999; overflow:hidden;}
     .fx-flash {position:absolute; inset:0; background:radial-gradient(ellipse at 50% 32%,
       rgba(232,208,145,.34), transparent 58%); animation:fxFlash 1.05s ease-out forwards;}
     .fx-flash.miss {background:radial-gradient(ellipse at 50% 32%,
@@ -2517,35 +2499,77 @@ def _react_answer(code: str, pid: str) -> None:
     _cheer(ok, _cheer_n(live, pid, me))
 
 
+def _burst_bits(n: int) -> str:
+    """콤보 폭죽. CSS만으로 그린다(이미지·상용 이펙트 없음)."""
+    count = 8 if n < 3 else (12 if n < 5 else (16 if n < 8 else 22))
+    bits = []
+    for i in range(count):
+        ang = (360 / count) * i
+        dist = 70 + (i % 5) * 18
+        rad = math.radians(ang)
+        dx = int(dist * math.cos(rad))
+        dy = int(dist * math.sin(rad))
+        bits.append(f"<i style='--dx:{dx}px;--dy:{dy}px;--rot:{ang}deg'></i>")
+    return "<span class='fx-burst'>" + "".join(bits) + "</span>"
+
+
 def _show_fx() -> None:
+    """처음 이펙트(플래시·링·폭죽·연속 문구) + 소리만. 알약/토스트 UI는 쓰지 않는다."""
     fx = st.session_state.pop("_pending_fx", None)
     pending = st.session_state.pop("_pending_sfx", None)
-    if not fx and not pending:
+    if pending:
+        try:
+            sfx.play(pending[0], pending[1])
+        except Exception:
+            pass
+    if not fx:
         return
-    ok = bool((fx or {}).get("ok")) if fx else True
-    n = int((fx or {}).get("streak") or 0) if fx else 0
-    kind = str(pending[0]) if pending else ("ok" if ok else "miss")
-    tok = str(pending[1]) if pending else f"fx-{int(st.session_state.get('_sfx_n') or 0)}-{n}-{kind}"
-    # 마크다운 폴백: components iframe 안이 아니라 본문에 바로 그려 항상 보이게
-    if fx is not None:
-        if ok and n < 2:
-            st.markdown("<div class='fx-toast ok'>정답</div>", unsafe_allow_html=True)
-        elif ok:
-            cls = "fx-combo big" if n >= 5 else "fx-combo"
-            note = "대폭발 콤보" if n >= 8 else ("콤보가 터졌습니다" if n >= 5 else ("연속 정답" if n >= 3 else "콤보 시작"))
-            st.markdown(
-                f"<div class='{cls}'><b>{n}연속!</b><span>{html.escape(note)}</span></div>",
-                unsafe_allow_html=True,
-            )
+    ok = bool(fx.get("ok"))
+    n = int(fx.get("streak") or 0)
+    if ok:
+        cls = "fx-pop"
+        flash_cls = "fx-flash"
+        if n >= 5:
+            cls += " hot big"
+            flash_cls += " big"
+        elif n >= 2:
+            cls += " hot"
+            flash_cls += " hot"
+        title = f"{n}연속!" if n >= 2 else "맞힘"
+        if n >= 8:
+            note = "대폭발 콤보"
+        elif n >= 5:
+            note = "콤보가 터졌습니다"
+        elif n >= 3:
+            note = "연속 정답"
+        elif n >= 2:
+            note = "콤보 시작"
         else:
-            st.markdown("<div class='fx-toast miss'>아쉽</div>", unsafe_allow_html=True)
-    try:
-        if fx is not None:
-            sfx.cue(ok, n, kind, tok)
-        else:
-            sfx.play(kind, tok)
-    except Exception:
-        pass
+            note = "정답입니다"
+        sparks = "".join(
+            f"<i class='fx-spark' style='--dx:{dx}px;--dy:{dy}px'></i>"
+            for dx, dy in ((-70, -35), (75, -45), (0, -70), (-55, 50), (60, 55))
+        )
+        rings = "<i class='fx-ring'></i>"
+        if n >= 3:
+            rings += "<i class='fx-ring r2'></i>"
+        if n >= 5:
+            rings += "<i class='fx-ring r3'></i>"
+        burst = _burst_bits(n) if n >= 2 else ""
+        flash = f"<div class='{flash_cls}'></div>"
+    else:
+        cls = "fx-pop miss"
+        title = "아쉽"
+        note = "다음 문항에서 다시"
+        sparks = ""
+        rings = ""
+        burst = ""
+        flash = "<div class='fx-flash miss'></div>"
+    st.markdown(
+        f"<div class='fx-layer'>{flash}{rings}{sparks}{burst}"
+        f"<div class='{cls}'><b>{html.escape(title)}</b><span>{html.escape(note)}</span></div></div>",
+        unsafe_allow_html=True,
+    )
 
 
 def _result_banner(grade: str, title: str, note: str) -> None:
