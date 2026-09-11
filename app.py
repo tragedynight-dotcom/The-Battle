@@ -94,44 +94,43 @@ st.markdown(
     html, body, [class*="css"], .stApp, .stMarkdown, button, input, textarea, select {
       font-family: "Pretendard", "Malgun Gothic", sans-serif !important;
     }
-    /* 한글 음절 중간 줄바꿈 차단 (객관식·문제·본문 공통) */
-    .stApp p, .stApp li, .stApp label, .stApp span,
+    /* 한글 줄바꿈 — 다통과(Police_Exam)와 같이 keep-all */
+    .stApp p, .stApp li, .stApp label,
     .stApp [data-testid="stMarkdownContainer"],
-    .stApp [data-testid="stMarkdownContainer"] *,
-    .stApp button, .stApp button *,
-    .stApp a, .stApp a *,
     .qbox, .qbox *, .case-card, .case-card *, .brief, .brief *,
-    .ok, .bad, .svc, .svc *, .mast, .mast *,
-    .choice-face, .choice-face *, .choice-txt, .choice-txt * {
+    .ok, .bad, .svc, .svc *, .mast, .mast * {
       word-break: keep-all !important;
       line-break: strict !important;
       overflow-wrap: break-word !important;
-      -webkit-line-break: after-white-space;
     }
-    /* 객관식: 단어 단위 nowrap (버튼 안 한글 쪼개짐 우회) */
-    .choice-face {
-      background:var(--card); border:1px solid var(--line); border-bottom:none;
-      border-radius:11px 11px 0 0; padding:12px 14px 8px; margin:0;
-      color:var(--ink); font-weight:650; font-size:.95rem; line-height:1.55;
-      box-shadow:none;}
-    .choice-face.sel {
-      border-color:var(--navy); background:#f4f6f9;}
-    .choice-face .nw, .choice-txt .nw, .qbox .nw, .stem .nw {
-      white-space:nowrap !important;}
-    .choice-face .kw, .choice-txt .kw, .qbox .kw, .stem .kw {
-      word-break:keep-all !important; line-break:strict !important; white-space:normal !important;}
-    /* 보기 본문 바로 아래 선택 버튼 — 카드 하단처럼 */
-    div[data-testid="stElementContainer"]:has(.choice-face) {
-      margin-bottom:0 !important; padding-bottom:0 !important;}
-    div[data-testid="stElementContainer"]:has(.choice-face) + div[data-testid="stElementContainer"] {
-      margin-top:0 !important; margin-bottom:8px !important;}
-    div[data-testid="stElementContainer"]:has(.choice-face) + div div.stButton > button {
-      border-top-left-radius:0 !important; border-top-right-radius:0 !important;
-      min-height:2.35rem !important; margin-top:0 !important;
-      justify-content:center !important;}
-    div[data-testid="stElementContainer"]:has(.choice-face) + div div.stButton > button
-      [data-testid="stMarkdownContainer"] p {
-      text-align:center !important; white-space:nowrap !important; font-size:.88rem !important;}
+    /* 객관식 보기: 다통과처럼 radio 라벨 (버튼 안 긴 한글 금지) */
+    div[data-testid="stRadio"] label {
+      background: var(--card) !important;
+      border: 1px solid var(--line) !important;
+      border-radius: 11px !important;
+      padding: 0.75rem 0.95rem !important;
+      margin-bottom: 0.45rem !important;
+      word-break: keep-all !important;
+      line-break: strict !important;
+      white-space: normal !important;
+      line-height: 1.55 !important;
+      color: var(--ink) !important;
+      align-items: flex-start !important;
+    }
+    div[data-testid="stRadio"] label p,
+    div[data-testid="stRadio"] label span,
+    div[data-testid="stRadio"] label div {
+      word-break: keep-all !important;
+      line-break: strict !important;
+      white-space: normal !important;
+      overflow-wrap: break-word !important;
+      line-height: 1.55 !important;
+      font-weight: 650 !important;
+      color: var(--ink) !important;
+    }
+    div[data-testid="stRadio"] > div {
+      gap: 0.35rem !important;
+    }
     .stApp {
       background:
         radial-gradient(800px 360px at 12% -8%, rgba(226,85,61,.07), transparent 55%),
@@ -235,27 +234,11 @@ st.markdown(
         justify-content:center !important;}
       div[data-testid="stElementContainer"]:has(.nav-mark) + div div.stButton > button [data-testid="stMarkdownContainer"] p {
         font-size:.82rem !important; white-space:nowrap !important; text-align:center !important;}
-      /* 객관식 보기만 줄바꿈. 액션 버튼은 한 줄 */
-      div[data-testid="stElementContainer"]:has(.choice-mark) ~ div div.stButton > button,
-      div[data-testid="stElementContainer"]:has(.choice-mark) ~ div div.stButton > button [data-testid="stMarkdownContainer"] p {
-        white-space:normal !important; word-break:keep-all !important; overflow-wrap:normal !important;
-        line-break:strict !important;}
-      div.stButton > button[kind="primary"] [data-testid="stMarkdownContainer"] p,
-      div.stFormSubmitButton > button [data-testid="stMarkdownContainer"] p,
-      div.stLinkButton > a [data-testid="stMarkdownContainer"] p {
-        white-space:nowrap !important; word-break:keep-all !important; overflow-wrap:normal !important;
-        font-size:clamp(.82rem, 3.2vw, .92rem) !important; text-align:center !important;}
-      div.stButton > button, div.stFormSubmitButton > button {
-        padding:.62rem .7rem !important;}
-      /* 내비 버튼은 가운데 정렬·한 줄 유지 우선 */
-      div[data-testid="stElementContainer"]:has(.nav-mark) + div div.stButton > button,
-      div[data-testid="stElementContainer"]:has(.nav-mark) + div [data-testid="stHorizontalBlock"] div.stButton > button {
-        white-space:nowrap !important;}
-      div[data-testid="stElementContainer"]:has(.nav-mark) + div div.stButton > button [data-testid="stMarkdownContainer"] p {
-        white-space:nowrap !important; text-align:center !important;}
+      div[data-testid="stRadio"] label {
+        padding: 0.65rem 0.8rem !important; font-size: clamp(.86rem, 3.4vw, .95rem) !important;}
       .qbox {font-size:clamp(.92rem, 3.8vw, 1.02rem); padding:14px 14px;
-        word-break:keep-all; overflow-wrap:normal; line-break:strict;}
-      .qbox .stem {word-break:keep-all; overflow-wrap:normal; line-break:strict;}
+        word-break:keep-all; overflow-wrap:break-word; line-break:strict;}
+      .qbox .stem {word-break:keep-all; overflow-wrap:break-word; line-break:strict;}
       .codebox {font-size:clamp(2rem, 12vw, 2.6rem); padding:16px 12px;}
     }
     header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecoration"],
@@ -1197,24 +1180,25 @@ def show_review(history: list | None, deck: list[dict]) -> None:
 def render_question(item: dict, qn: int, total: int, double: bool = False) -> None:
     tag = "<span class='x2tag'>찬스 문제 · 점수 2배</span>" if double else ""
     if item.get("ox"):
-        ask = glue_html(item.get("ask") or "아래 설명이 맞으면 O, 틀리면 X.")
-        ctx = glue_html(item.get("ctx") or "")
-        say = glue_html(item.get("q") or "")
+        ask = html.escape(item.get("ask") or "아래 설명이 맞으면 O, 틀리면 X.")
+        ctx = html.escape(item.get("ctx") or "").replace("\n", "<br>")
+        say = html.escape(item.get("q") or "").replace("\n", "<br>")
         body = f"<p class='ox-ask'>{ask}</p>"
         if item.get("ctx"):
             body += f"<p class='ox-ctx'>{ctx}</p>"
         body += f"<p class='ox-say'>{say}</p>"
     else:
-        body = f"<div class='stem'>{glue_html(item['q'])}</div>"
+        body = f"<div class='stem'>{html.escape(item['q']).replace(chr(10), '<br>')}</div>"
     st.markdown(
         f"<div class='qbox{' x2' if double else ''}'>"
-        f"<div class='meta'><span>{glue_html(item['area'])} · {qn}/{total}</span>{tag}</div>"
+        f"<div class='meta'><span>{html.escape(item['area'])} · {qn}/{total}</span>{tag}</div>"
         f"{body}</div>",
         unsafe_allow_html=True,
     )
 
 
 def pick_choice(item: dict, key: str, selected: int | None = None) -> int | None:
+    """다통과(Police_Exam)와 같이 st.radio로 보기를 보여 한글 줄바꿈을 지킨다."""
     if item.get("ox"):
         st.markdown("<div class='ox-mark'></div>", unsafe_allow_html=True)
         cols = st.columns(2, gap="medium")
@@ -1224,18 +1208,21 @@ def pick_choice(item: dict, key: str, selected: int | None = None) -> int | None
                 if st.button(c, key=f"{key}_{i}", type=kind):
                     return i
         return None
-    # 보기 본문은 HTML(nowrap)로 그리고, 버튼은 짧은 '선택'만 — 버튼 안 한글 쪼개짐 방지
+    choices = item["choices"]
     st.markdown("<div class='choice-mark'></div>", unsafe_allow_html=True)
-    for i, c in enumerate(item["choices"]):
-        kind = "primary" if selected is not None and i == selected else "secondary"
-        sel = " sel" if selected is not None and i == selected else ""
-        st.markdown(
-            f"<div class='choice-face{sel}'>{glue_html(f'{circle(i)} {c}')}</div>",
-            unsafe_allow_html=True,
-        )
-        if st.button(f"{circle(i)} 선택", key=f"{key}_{i}", type=kind, use_container_width=True):
-            return i
-    return None
+    picked = st.radio(
+        "보기",
+        options=list(range(len(choices))),
+        format_func=lambda i, ch=choices: f"{circle(i)} {ch[i]}",
+        index=selected if selected is not None else None,
+        key=key,
+        label_visibility="collapsed",
+    )
+    if picked is None:
+        return None
+    if selected is not None and int(picked) == int(selected):
+        return None
+    return int(picked)
 
 
 def pick_org() -> dict:
