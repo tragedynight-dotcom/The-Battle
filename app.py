@@ -647,14 +647,11 @@ def _qp_one(name: str) -> str:
 
 
 def _app_href(view: str, *, keep_room: bool = False, **extra: str) -> str:
-    """자유 화면 URL. 히스토리 push / 공유용."""
+    """자유 화면 URL. 히스토리 push / 공유용. pid는 넣지 않는다(공유 시 신원 충돌 방지)."""
     q: dict[str, str] = {"view": view}
     inn = _qp_one("in")
     if inn:
         q["in"] = inn
-    pid = _qp_one("pid") or str(st.session_state.get("pid") or "").strip()
-    if pid:
-        q["pid"] = pid
     kind = str(extra.pop("kind", "") or st.session_state.get("quiz_kind") or "").strip()
     if kind in ("exam", "ox"):
         q["kind"] = kind
@@ -663,6 +660,8 @@ def _app_href(view: str, *, keep_room: bool = False, **extra: str) -> str:
         if room:
             q["room"] = room
     for k, v in extra.items():
+        if k == "pid":
+            continue
         if v is not None and str(v) != "":
             q[k] = str(v)
     return "?" + urlencode(q)
@@ -770,11 +769,11 @@ def _open_view(view: str, **extra: str) -> None:
 
 
 def _persist_pid(pid: str) -> None:
-    """단체전 튕김 대비: 참가자 id를 URL·쿠키에 남긴다."""
+    """단체전 튕김 대비: 참가자 id를 쿠키·sessionStorage에만 남긴다. URL에 넣으면 링크 공유 시 신원이 겹친다."""
     pid = (pid or "").strip()
     if not pid:
         return
-    st.query_params["pid"] = pid
+    _clear_param("pid")
     _gate_js(
         f"""
         var KEY = "{PID_STORE}";
@@ -808,8 +807,7 @@ def _goto(phase: str) -> None:
     if phase == "gate":
         return
     st.query_params["view"] = phase
-    if st.session_state.get("pid"):
-        st.query_params["pid"] = st.session_state.pid
+    _clear_param("pid")
     if phase == "hub":
         st.session_state.pop("code", None)
         _clear_param("room")
@@ -1076,8 +1074,10 @@ def _bridge_gate_from_storage() -> None:
 
 
 if "pid" not in st.session_state:
-    restored = _qp_one("pid") or _cookie_pid()
+    # URL의 pid는 쓰지 않는다. 방 번호를 링크/주소로 공유할 때 신원이 겹쳐 같은 방이 안 된다.
+    restored = _cookie_pid()
     st.session_state.pid = restored if len(restored) >= 8 else uuid.uuid4().hex[:10]
+_clear_param("pid")
 if "phase" not in st.session_state:
     st.session_state.phase = "hub"
 if "unlocked" not in st.session_state:
@@ -1508,9 +1508,18 @@ def _flush_pending_join() -> None:
     pending = st.session_state.pop("_pending_join", None)
     if not pending:
         return
-    code = str(pending.get("code") or "").strip()
+    code = "".join(ch for ch in str(pending.get("code") or "") if ch.isdigit())[:4]
     name = str(pending.get("name") or "").strip()
     org = pending.get("org") or {}
+    if len(code) != 4 or not name:
+        st.session_state._join_err_show = "별명과 방 번호 4자리를 확인하십시오."
+        return
+    # 주소에 붙은 다른 사람 pid로 들어왔으면 새 신원으로 합류
+    existing = rooms.load(code)
+    if existing:
+        me = (existing.get("players") or {}).get(st.session_state.pid) or {}
+        if me and (me.get("name") or "").strip() and (me.get("name") or "").strip() != name:
+            st.session_state.pid = uuid.uuid4().hex[:10]
     try:
         room = rooms.join(code, st.session_state.pid, name, org)
     except Exception:
@@ -1524,6 +1533,7 @@ def _flush_pending_join() -> None:
     _clear_param("law")
     st.session_state.case_open = ""
     st.session_state.law_open = ""
+    _persist_pid(st.session_state.pid)
     _go_room(room)
 
 
@@ -2067,6 +2077,7 @@ def lobby_screen() -> None:
     lim = rooms.limit_sec(room)
     st.caption(_org_caption(room, pid))
     st.markdown(f"<div class='codebox'>{room['code']}</div>", unsafe_allow_html=True)
+    st.caption(f"지금 {len(room.get('players') or {})}명 · 같은 번호를 입력한 사람이 여기에 모입니다.")
     pills = [
         f"<span class='pill'>{html.escape(room['area_name'])}</span>",
         f"<span class='pill'>{room['count']}문항</span>",

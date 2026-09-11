@@ -68,8 +68,8 @@ def _write(room: dict) -> None:
 
 
 def load(code: str) -> dict | None:
-    code = (code or "").strip()
-    if not code:
+    code = "".join(ch for ch in (code or "") if ch.isdigit())[:4]
+    if len(code) != 4:
         return None
     return _read(code)
 
@@ -494,6 +494,10 @@ def _thin_side(room: dict) -> str:
 
 
 def join(code: str, pid: str, name: str, org: dict | None = None) -> dict | None:
+    code = "".join(ch for ch in (code or "") if ch.isdigit())[:4]
+    if len(code) != 4 or not (pid or "").strip():
+        return None
+
     def inner():
         room = _read(code)
         if room is None:
