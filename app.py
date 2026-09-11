@@ -738,7 +738,7 @@ def _push_history(href: str) -> None:
 
 
 def _stack_detail_history(*, list_href: str, detail_href: str) -> None:
-    """요지/개정이유: 목록을 남기고 상세를 한 칸 더 쌓아, 뒤로가면 목록→홈이 되게 한다."""
+    """요지/개정이유: 지금 칸을 목록으로 맞춘 뒤 상세를 반드시 push (주소가 이미 상세여도 한 칸 쌓음)."""
     if not list_href.startswith("?"):
         list_href = "?" + list_href
     if not detail_href.startswith("?"):
@@ -758,36 +758,51 @@ def _stack_detail_history(*, list_href: str, detail_href: str) -> None:
             }} catch (e) {{}}
             return app || window;
           }}
-          function stack(listHref, detailHref) {{
-            var app = appWin();
-            var key = "battleNavStacked:" + detailHref;
+          function stack(w, listHref, detailHref) {{
             try {{
-              if (app.sessionStorage.getItem(key) === "1") return;
-              app.sessionStorage.setItem(key, "1");
-            }} catch (e) {{}}
-            try {{
-              app.history.replaceState({{battleNav: "list"}}, "", app.location.pathname + listHref);
-              app.history.pushState({{battleNav: "detail"}}, "", app.location.pathname + detailHref);
-            }} catch (e) {{}}
-            try {{
-              if (window.top && window.top !== app) {{
-                var base = window.top.location.pathname;
-                window.top.history.replaceState({{battleNav: "list"}}, "", base + listHref);
-                window.top.history.pushState({{battleNav: "detail"}}, "", base + detailHref);
-              }}
+              var path = w.location.pathname;
+              w.history.replaceState({{battleNav: "list"}}, "", path + listHref);
+              w.history.pushState({{battleNav: "detail"}}, "", path + detailHref);
             }} catch (e) {{}}
           }}
-          stack("{list_href}", "{detail_href}");
+          var app = appWin();
+          stack(app, "{list_href}", "{detail_href}");
+          try {{ if (window.top && window.top !== app) stack(window.top, "{list_href}", "{detail_href}"); }} catch (e) {{}}
         }})();
         """
     )
 
 
+def _history_back() -> None:
+    """브라우저 뒤로가기와 같게 한 칸 되돌린다."""
+    _gate_js(
+        """
+        (function(){
+          function appWin() {
+            var app = window.parent;
+            try {
+              if (!app || !app.location || String(app.location.pathname||"").indexOf("/~/+/") < 0) {
+                if (window.top && window.top.document) {
+                  var f = window.top.document.querySelector('iframe[title=streamlitApp]');
+                  if (f && f.contentWindow) app = f.contentWindow;
+                }
+              }
+            } catch (e) {}
+            return app || window;
+          }
+          try { if (window.top) window.top.history.back(); } catch (e) {}
+          try {
+            var app = appWin();
+            if (app && app !== window.top) app.history.back();
+          } catch (e) {}
+        })();
+        """
+    )
+
+
 def _open_view(view: str, **extra: str) -> None:
-    """같은 탭 버튼 이동. case/law는 URL에 넣어 뒤로가기 시 목록·홈으로 돌아간다."""
+    """같은 탭 이동. case/law 상세는 목록 위에 한 칸을 반드시 쌓아 뒤로가기가 되게 한다."""
     st.session_state.phase = view
-    st.query_params["view"] = view
-    # pid는 URL에 넣지 않는다 (공유 시 신원 충돌)
 
     if view == "hub":
         st.session_state.pop("code", None)
@@ -796,6 +811,7 @@ def _open_view(view: str, **extra: str) -> None:
         _clear_param("law")
         st.session_state.case_open = ""
         st.session_state.law_open = ""
+        st.query_params["view"] = "hub"
         _push_history(_app_href("hub"))
         return
 
@@ -803,34 +819,50 @@ def _open_view(view: str, **extra: str) -> None:
         _clear_param("law")
         st.session_state.law_open = ""
         case_id = str(extra.get("case") or "").strip()
-        st.session_state.case_open = case_id
         if case_id:
-            st.query_params["case"] = case_id
+            st.session_state.case_open = case_id
+            # 히스토리를 먼저 쌓고, 그다음 Streamlit 주소를 맞춘다
             _stack_detail_history(
                 list_href=_app_href("cases"),
                 detail_href=_app_href("cases", case=case_id),
             )
+            st.query_params["view"] = "cases"
+            st.query_params["case"] = case_id
         else:
+            had_detail = bool(_qp_one("case") or st.session_state.get("case_open"))
             _clear_param("case")
-            _push_history(_app_href("cases"))
+            st.session_state.case_open = ""
+            st.query_params["view"] = "cases"
+            if had_detail:
+                _history_back()
+            else:
+                _push_history(_app_href("cases"))
         return
 
     if view == "laws":
         _clear_param("case")
         st.session_state.case_open = ""
         law_id = str(extra.get("law") or "").strip()
-        st.session_state.law_open = law_id
         if law_id:
-            st.query_params["law"] = law_id
+            st.session_state.law_open = law_id
             _stack_detail_history(
                 list_href=_app_href("laws"),
                 detail_href=_app_href("laws", law=law_id),
             )
+            st.query_params["view"] = "laws"
+            st.query_params["law"] = law_id
         else:
+            had_detail = bool(_qp_one("law") or st.session_state.get("law_open"))
             _clear_param("law")
-            _push_history(_app_href("laws"))
+            st.session_state.law_open = ""
+            st.query_params["view"] = "laws"
+            if had_detail:
+                _history_back()
+            else:
+                _push_history(_app_href("laws"))
         return
 
+    st.query_params["view"] = view
     _push_history(_app_href(view, **{k: str(v) for k, v in extra.items() if v}))
 
 
@@ -898,17 +930,27 @@ def _apply_browser_nav() -> None:
     """URL view/case/law/room 기준 복구. 시합 중 새로고침은 방으로 복귀."""
     view_early = _qp_one("view")
     phase_early = st.session_state.get("phase") or "hub"
-    # 판례·개정 화면에서만 상세 히스토리 스택 (입장/시합 중 case 잔여값 간섭 방지)
+    # URL만 기준으로 상세 여부 판단. 세션 fallback이면 뒤로가기 직후 요지가 다시 열린다.
     on_case_law = view_early in ("cases", "laws") or phase_early in ("cases", "laws")
-    case_now = (_qp_one("case") or str(st.session_state.get("case_open") or "").strip()) if on_case_law else ""
-    law_now = (_qp_one("law") or str(st.session_state.get("law_open") or "").strip()) if on_case_law else ""
+    case_now = _qp_one("case") if on_case_law else ""
+    law_now = _qp_one("law") if on_case_law else ""
+    if view_early == "cases" or phase_early == "cases":
+        st.session_state.case_open = case_now
+    if view_early == "laws" or phase_early == "laws":
+        st.session_state.law_open = law_now
     if not on_case_law:
         _clear_param("case")
         _clear_param("law")
         st.session_state.case_open = ""
         st.session_state.law_open = ""
+    elif view_early == "cases" and not case_now:
+        _clear_param("case")
+        st.session_state.case_open = ""
+    elif view_early == "laws" and not law_now:
+        _clear_param("law")
+        st.session_state.law_open = ""
     game_lock = "true" if (phase_early in VIEW_LOCK or view_early in VIEW_LOCK) else "false"
-    # 겉 창·iframe 모두 popstate 시 주소의 view로 다시 그리게 한다.
+    # popstate만 연결. 매 렌더마다 상세를 다시 쌓지 않음(뒤로가기 무력화 원인).
     _gate_js(
         f"""
         (function(){{
@@ -935,7 +977,7 @@ def _apply_browser_nav() -> None:
             }} catch (e) {{}}
             try {{ app.location.reload(); }} catch (e) {{}}
           }}
-          function onPop() {{
+          function onPop(ev) {{
             try {{
               var app = appWin();
               if (app && app.__battleGameLock) {{
@@ -945,8 +987,11 @@ def _apply_browser_nav() -> None:
             }} catch (e) {{}}
             var q = "";
             try {{
-              if (window.top && window.top.location) q = window.top.location.search || "";
+              if (ev && ev.target && ev.target.location) q = ev.target.location.search || "";
             }} catch (e) {{}}
+            if (!q) {{
+              try {{ if (window.top && window.top.location) q = window.top.location.search || ""; }} catch (e) {{}}
+            }}
             if (!q) {{
               try {{ q = (appWin().location && appWin().location.search) || ""; }} catch (e) {{}}
             }}
@@ -955,57 +1000,15 @@ def _apply_browser_nav() -> None:
           var app = appWin();
           try {{ app.__battleGameLock = {game_lock}; }} catch (e) {{}}
           try {{
-            if (app && !app.__battlePopV7Fn) {{
-              app.__battlePopV7Fn = true;
+            if (app && !app.__battlePopV8Fn) {{
+              app.__battlePopV8Fn = true;
               app.addEventListener("popstate", onPop);
             }}
           }} catch (e) {{}}
           try {{
-            if (window.top && !window.top.__battlePopV7Fn) {{
-              window.top.__battlePopV7Fn = true;
+            if (window.top && !window.top.__battlePopV8Fn) {{
+              window.top.__battlePopV8Fn = true;
               window.top.addEventListener("popstate", onPop);
-            }}
-          }} catch (e) {{}}
-          try {{
-            if (app && app.location) {{
-              var forceCase = "{case_now}";
-              var forceLaw = "{law_now}";
-              var u = new URL(app.location.href);
-              if (forceCase) u.searchParams.set("case", forceCase);
-              else u.searchParams.delete("case");
-              if (forceLaw) u.searchParams.set("law", forceLaw);
-              else u.searchParams.delete("law");
-              var hasDetail = !!(forceCase || forceLaw);
-              if (hasDetail) {{
-                var detailQ = u.search;
-                u.searchParams.delete("case");
-                u.searchParams.delete("law");
-                var listQ = u.search;
-                var key = "battleNavStacked:" + detailQ;
-                try {{
-                  if (app.sessionStorage.getItem(key) !== "1") {{
-                    app.sessionStorage.setItem(key, "1");
-                    app.history.replaceState({{battleNav: "list"}}, "", app.location.pathname + listQ);
-                    app.history.pushState({{battleNav: "detail"}}, "", app.location.pathname + detailQ);
-                    try {{
-                      if (window.top && window.top !== app) {{
-                        var base = window.top.location.pathname;
-                        window.top.history.replaceState({{battleNav: "list"}}, "", base + listQ);
-                        window.top.history.pushState({{battleNav: "detail"}}, "", base + detailQ);
-                      }}
-                    }} catch (e) {{}}
-                  }}
-                }} catch (e) {{}}
-              }} else {{
-                try {{
-                  var rm = [];
-                  for (var i = 0; i < app.sessionStorage.length; i++) {{
-                    var k = app.sessionStorage.key(i);
-                    if (k && k.indexOf("battleNavStacked:") === 0) rm.push(k);
-                  }}
-                  rm.forEach(function (k) {{ app.sessionStorage.removeItem(k); }});
-                }} catch (e) {{}}
-              }}
             }}
           }} catch (e) {{}}
         }})();
