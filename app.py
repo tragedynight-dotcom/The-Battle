@@ -20,8 +20,7 @@ EXAM_TITLE = "실무역량평가(객관식)"
 EXAM_DESC = "객관식 문제로 개인전·단체전 등 여러 모드에서 겨룹니다."
 OX_DESC = "OX문제로 개인전·단체전 등 여러 모드에서 겨룹니다."
 
-# WORD JOINER — 텍스트 노드용. 버튼은 삼성 브라우저에서 무시되는 경우가 많아
-# 객관식 보기는 HTML <span class="nw"> 로 단어를 묶는다.
+# 객관식 보기는 다통과처럼 st.radio 사용 (버튼 안 긴 한글 줄바꿈 깨짐 방지)
 _WJ = "\u2060"
 
 
@@ -46,35 +45,6 @@ def glue_kr(text: str) -> str:
     flush()
     return "".join(out)
 
-
-def glue_html(text: str) -> str:
-    """HTML용: 단어마다 nowrap span. Streamlit 버튼과 달리 줄바꿈이 확실히 지킨다."""
-    if not text:
-        return ""
-    out: list[str] = []
-    buf: list[str] = []
-
-    def flush() -> None:
-        if not buf:
-            return
-        tok = "".join(buf)
-        esc = html.escape(tok)
-        # 너무 긴 덩어리는 화면을 뚫지 않게 keep-all만 적용
-        cls = "nw" if len(tok) <= 28 else "kw"
-        out.append(f'<span class="{cls}">{esc}</span>')
-        buf.clear()
-
-    for ch in text:
-        if ch == "\n":
-            flush()
-            out.append("<br>")
-        elif ch.isspace() or ch in "·•|/｜,.;:!?()[]{}「」『』\"'“”‘’":
-            flush()
-            out.append(html.escape(ch) if not ch.isspace() else ch)
-        else:
-            buf.append(ch)
-    flush()
-    return "".join(out)
 
 st.set_page_config(page_title=APP_TITLE, page_icon="🛡️", layout="wide")
 st.markdown(
