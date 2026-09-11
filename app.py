@@ -666,22 +666,34 @@ def _app_href(view: str, *, keep_room: bool = False, **extra: str) -> str:
 
 
 def _push_history(href: str) -> None:
-    """부모 창 history에 쌓아 브라우저 뒤로가기가 먹히게 한다."""
+    """앱 iframe history에 쌓는다. (Cloud는 top 껍데기와 /~/+/ 앱이 분리됨)"""
     if not href.startswith("?"):
         href = "?" + href
     _gate_js(
         f"""
-        var w = window.parent;
-        try {{ if (window.top && window.top.location) w = window.top; }} catch (e) {{}}
+        var app = window.parent;
         try {{
-          var next = w.location.pathname + "{href}";
-          if ((w.location.pathname + w.location.search) !== next) {{
-            w.history.pushState({{battleNav: 1}}, "", next);
+          if (!app || !app.location || String(app.location.pathname||"").indexOf("/~/+/") < 0) {{
+            if (window.top && window.top.document) {{
+              var f = window.top.document.querySelector('iframe[title=streamlitApp]');
+              if (f && f.contentWindow) app = f.contentWindow;
+            }}
           }}
-          if (!w.__battlePopBound) {{
-            w.__battlePopBound = true;
-            w.addEventListener("popstate", function () {{
-              try {{ w.location.replace(w.location.href); }} catch (e) {{}}
+        }} catch (e) {{}}
+        try {{
+          var next = app.location.pathname + "{href}";
+          if ((app.location.pathname + app.location.search) !== next) {{
+            app.history.pushState({{battleNav: 1}}, "", next);
+          }}
+          try {{
+            if (window.top && window.top !== app) {{
+              window.top.history.replaceState({{battleNav: 1}}, "", window.top.location.pathname + "{href}");
+            }}
+          }} catch (e) {{}}
+          if (!app.__battlePopBound) {{
+            app.__battlePopBound = true;
+            app.addEventListener("popstate", function () {{
+              try {{ app.location.replace(app.location.href); }} catch (e) {{}}
             }});
           }}
         }} catch (e) {{}}
@@ -690,32 +702,42 @@ def _push_history(href: str) -> None:
 
 
 def _stack_detail_history(*, list_href: str, detail_href: str) -> None:
-    """목록 URL을 아래에 두고 상세를 push. Streamlit replaceState가 히스토리를 덮어도 복구한다."""
+    """목록→상세를 앱 iframe history에 두 칸으로 쌓아 브라우저 뒤로가기가 요지를 닫게 한다."""
     if not list_href.startswith("?"):
         list_href = "?" + list_href
     if not detail_href.startswith("?"):
         detail_href = "?" + detail_href
     _gate_js(
         f"""
-        var w = window.parent;
-        try {{ if (window.top && window.top.location) w = window.top; }} catch (e) {{}}
+        var app = window.parent;
         try {{
-          if (!w.__battlePopBound) {{
-            w.__battlePopBound = true;
-            w.addEventListener("popstate", function () {{
-              try {{ w.location.replace(w.location.href); }} catch (e) {{}}
+          if (!app || !app.location || String(app.location.pathname||"").indexOf("/~/+/") < 0) {{
+            if (window.top && window.top.document) {{
+              var f = window.top.document.querySelector('iframe[title=streamlitApp]');
+              if (f && f.contentWindow) app = f.contentWindow;
+            }}
+          }}
+        }} catch (e) {{}}
+        try {{
+          if (!app.__battlePopBound) {{
+            app.__battlePopBound = true;
+            app.addEventListener("popstate", function () {{
+              try {{ app.location.replace(app.location.href); }} catch (e) {{}}
             }});
           }}
-          var path = w.location.pathname;
-          var listUrl = path + "{list_href}";
-          var detailUrl = path + "{detail_href}";
-          // Streamlit이 이미 상세 URL로 replace한 뒤에도, 목록→상세 두 칸으로 다시 쌓는다.
+          var listUrl = app.location.pathname + "{list_href}";
+          var detailUrl = app.location.pathname + "{detail_href}";
           setTimeout(function () {{
             try {{
-              w.history.replaceState({{battleNav: "list"}}, "", listUrl);
-              w.history.pushState({{battleNav: "detail"}}, "", detailUrl);
+              app.history.replaceState({{battleNav: "list"}}, "", listUrl);
+              app.history.pushState({{battleNav: "detail"}}, "", detailUrl);
+              try {{
+                if (window.top && window.top !== app) {{
+                  window.top.history.replaceState({{battleNav: "detail"}}, "", window.top.location.pathname + "{detail_href}");
+                }}
+              }} catch (e) {{}}
             }} catch (e) {{}}
-          }}, 30);
+          }}, 40);
         }} catch (e) {{}}
         """
     )
@@ -830,16 +852,24 @@ def _apply_browser_nav() -> None:
     """URL view/case/law/room 기준 복구. 시합 중 새로고침은 방으로 복귀."""
     _gate_js(
         """
-        var w = window.parent;
-        try { if (window.top && window.top.location) w = window.top; } catch (e) {}
-        w.__battleLockOn = false;
-        w.__battleNavBoot = false;
-        if (!w.__battlePopBound) {
-          w.__battlePopBound = true;
-          w.addEventListener("popstate", function () {
-            try { w.location.replace(w.location.href); } catch (e) {}
-          });
-        }
+        var app = window.parent;
+        try {
+          if (!app || !app.location || String(app.location.pathname||"").indexOf("/~/+/") < 0) {
+            if (window.top && window.top.document) {
+              var f = window.top.document.querySelector('iframe[title=streamlitApp]');
+              if (f && f.contentWindow) app = f.contentWindow;
+            }
+          }
+        } catch (e) {}
+        try { app.__battleLockOn = false; app.__battleNavBoot = false; } catch (e) {}
+        try {
+          if (app && !app.__battlePopBound) {
+            app.__battlePopBound = true;
+            app.addEventListener("popstate", function () {
+              try { app.location.replace(app.location.href); } catch (e) {}
+            });
+          }
+        } catch (e) {}
         """
     )
 
