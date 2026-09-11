@@ -18,11 +18,16 @@ ATTACH = re.compile(
 # PDF에서 자주 붙어서 나오는 표현
 SPACE_FIXES = [
     (re.compile(r"특성중"), "특성 중"),
+    (re.compile(r"다음중"), "다음 중"),
     (re.compile(r"대해서가장"), "대해서 가장"),
     (re.compile(r"으로가장"), "으로 가장"),
     (re.compile(r"중가장"), "중 가장"),
+    (re.compile(r"과정에서(?=[가-힣])"), "과정에서 "),
     (re.compile(r"에대해서(?=\S)"), "에 대해서"),
+    (re.compile(r"에대한(?=\S)"), "에 대한"),
     (re.compile(r"에대해(?=\S)"), "에 대해"),
+    (re.compile(r"발생시(?=\s)"), "발생 시"),
+    (re.compile(r"변경 후 추가종결"), "변경 후 추가 종결"),
 ]
 
 
