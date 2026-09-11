@@ -95,29 +95,113 @@ def _countdown_samples() -> list[int]:
 @st.cache_data
 def _clip(kind: str) -> bytes:
     if kind == "tick":
-        return _tone([(980, 90)])
+        return _tone([(980, 90)], 0.40)
     if kind == "pick":
-        return _tone([(760, 55)])
+        return _tone([(760, 55)], 0.38)
     if kind in ("submit", "ok"):
-        return _chime([(659, 70), (880, 130)], 0.30)
+        return _chime([(659, 70), (880, 130)], 0.38)
     if kind == "combo2":
-        return _chime([(659, 65), (784, 75), (988, 160)], 0.33)
+        return _chime([(659, 65), (784, 75), (988, 160)], 0.40)
     if kind == "combo3":
-        return _chime([(523, 55), (659, 65), (784, 75), (1047, 190)], 0.35)
+        return _chime([(523, 55), (659, 65), (784, 75), (1047, 190)], 0.42)
     if kind == "combo5":
-        return _chime([(523, 50), (659, 50), (784, 55), (988, 70), (1175, 210)], 0.37)
+        return _chime([(523, 50), (659, 50), (784, 55), (988, 70), (1175, 210)], 0.44)
     if kind == "combo8":
-        return _chime([(392, 45), (523, 50), (659, 55), (784, 60), (988, 70), (1319, 230)], 0.39)
+        return _chime([(392, 45), (523, 50), (659, 55), (784, 60), (988, 70), (1319, 230)], 0.46)
     if kind == "miss":
         # 저음은 폰 스피커에서 거의 안 들림 → 중고음·볼륨 보강
-        return _tone([(420, 140), (280, 200)], 0.36)
+        return _tone([(520, 120), (390, 180)], 0.42)
     if kind == "go":
-        return _tone([(523, 100), (784, 180)])
+        return _tone([(523, 100), (784, 180)], 0.40)
     if kind == "done":
-        return _chime([(392, 100), (523, 170)], 0.30)
+        return _chime([(523, 100), (659, 170)], 0.38)
     if kind == "count10":
         return _wav(_countdown_samples())
-    return _tone([(660, 80)])
+    if kind == "silent":
+        return _wav([0] * int(RATE * 0.05))
+    return _tone([(660, 80)], 0.38)
+
+
+def _silent_b64() -> str:
+    return base64.b64encode(_clip("silent")).decode("ascii")
+
+
+def _play_js(b64: str, *, offset: float | None = None) -> str:
+    """겉 창(top) Audio로 재생. iframe autoplay 차단·콘솔 에러를 줄인다."""
+    off = "null" if offset is None else str(float(offset))
+    silent = _silent_b64()
+    return f"""
+<script>
+(function () {{
+  function host() {{
+    try {{ if (window.top && window.top.document) return window.top; }} catch (e) {{}}
+    try {{ return window.parent; }} catch (e) {{}}
+    return window;
+  }}
+  var w = host();
+  try {{
+    if (!w.__tbUnlockBound) {{
+      w.__tbUnlockBound = true;
+      var unlock = function () {{
+        try {{
+          var Ctx = w.AudioContext || w.webkitAudioContext;
+          if (Ctx) {{
+            w.__tbCtx = w.__tbCtx || new Ctx();
+            if (w.__tbCtx.state === "suspended") w.__tbCtx.resume();
+          }}
+          var s = w.__tbSilent || new w.Audio("data:audio/wav;base64,{silent}");
+          w.__tbSilent = s;
+          s.volume = 0.01;
+          var p = s.play();
+          if (p && p.then) p.then(function () {{
+            try {{ s.pause(); }} catch (e) {{}}
+            w.__tbAudioReady = true;
+          }}).catch(function () {{}});
+        }} catch (e) {{}}
+      }};
+      w.document.addEventListener("touchstart", unlock, {{ capture: true, passive: true }});
+      w.document.addEventListener("click", unlock, {{ capture: true, passive: true }});
+    }}
+  }} catch (e) {{}}
+  function go() {{
+    try {{
+      var a = w.__tbSfx;
+      if (!a) {{
+        a = new w.Audio();
+        w.__tbSfx = a;
+      }}
+      a.pause();
+      a.src = "data:audio/wav;base64,{b64}";
+      a.volume = 1;
+      var start = function () {{
+        try {{
+          var off = {off};
+          if (off !== null && !isNaN(off)) a.currentTime = off;
+          else a.currentTime = 0;
+        }} catch (e) {{}}
+        var p = a.play();
+        if (p && p.catch) p.catch(function () {{}});
+      }};
+      if (a.readyState >= 2) start();
+      else {{
+        a.addEventListener("loadeddata", start, {{ once: true }});
+        a.addEventListener("canplaythrough", start, {{ once: true }});
+        setTimeout(start, 40);
+      }}
+    }} catch (e) {{}}
+  }}
+  go();
+}})();
+</script>
+"""
+
+
+def arm_unlock() -> None:
+    """앱 로드 시 한 번. 첫 터치로 소리를 풀어 둔다."""
+    if st.session_state.get("_sfx_armed"):
+        return
+    st.session_state._sfx_armed = True
+    components.html(_play_js(_silent_b64()), height=0, width=0)
 
 
 def play(kind: str, token: str) -> None:
@@ -125,60 +209,19 @@ def play(kind: str, token: str) -> None:
         return
     st.session_state._sfx_token = token
     b64 = base64.b64encode(_clip(kind)).decode("ascii")
-    # autoplay 속성만 쓰면 모바일에서 막히는 경우가 많아 play()를 직접 호출한다.
-    components.html(
-        f"""
-<audio id="tb-sfx" src="data:audio/wav;base64,{b64}" preload="auto"></audio>
-<script>
-(function () {{
-  var a = document.getElementById("tb-sfx");
-  if (!a) return;
-  function go() {{
-    try {{
-      a.currentTime = 0;
-      var p = a.play();
-      if (p && p.catch) p.catch(function () {{}});
-    }} catch (e) {{}}
-  }}
-  if (a.readyState >= 2) go();
-  else {{
-    a.addEventListener("canplaythrough", go, {{ once: true }});
-    a.addEventListener("loadeddata", go, {{ once: true }});
-  }}
-  setTimeout(go, 30);
-  setTimeout(go, 120);
-}})();
-</script>
-""",
-        height=0,
-    )
+    components.html(_play_js(b64), height=0, width=0)
 
 
 def countdown(play_at: str, token: str) -> None:
     """10부터 1까지 매 초 신호음, 0에 시작음."""
+    if st.session_state.get("_sfx_token") == token:
+        return
+    st.session_state._sfx_token = token
     try:
         end_ms = int(datetime.fromisoformat(play_at).timestamp() * 1000)
     except Exception:
         return
     b64 = base64.b64encode(_clip("count10")).decode("ascii")
-    components.html(
-        f"""
-<audio id="cd" src="data:audio/wav;base64,{b64}"></audio>
-<script>
-const end = {end_ms};
-const a = document.getElementById("cd");
-const left = Math.max(0, Math.ceil((end - Date.now()) / 1000));
-const offset = Math.min(10, Math.max(0, 10 - left));
-function go() {{
-  try {{
-    a.currentTime = offset;
-    const p = a.play();
-    if (p && p.catch) p.catch(function(){{}});
-  }} catch (e) {{}}
-}}
-if (a.readyState >= 3) go();
-else a.addEventListener("canplaythrough", go, {{ once: true }});
-</script>
-""",
-        height=0,
-    )
+    left = max(0, math.ceil((end_ms - datetime.now().timestamp() * 1000) / 1000))
+    offset = min(10, max(0, 10 - left))
+    components.html(_play_js(b64, offset=float(offset)), height=0, width=0)

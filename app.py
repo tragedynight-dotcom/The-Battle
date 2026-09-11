@@ -176,7 +176,7 @@ st.markdown(
       flex-wrap:nowrap !important; gap:8px !important;}
     div[data-testid="stElementContainer"]:has(.nav-mark) + div div.stButton > button,
     div[data-testid="stElementContainer"]:has(.nav-mark) + div [data-testid="stHorizontalBlock"] div.stButton > button {
-      white-space:nowrap !important; min-width:0 !important; padding:.55rem .35rem !important;
+      white-space:normal !important; min-width:0 !important; padding:.55rem .45rem !important;
       font-size:.9rem !important; justify-content:center !important;}
     div[data-testid="stElementContainer"]:has(.nav-mark) + div div.stButton > button > div,
     div[data-testid="stElementContainer"]:has(.nav-mark) + div div.stButton > button > div > span,
@@ -185,7 +185,7 @@ st.markdown(
       width:100% !important; justify-content:center !important;}
     div[data-testid="stElementContainer"]:has(.nav-mark) + div div.stButton > button [data-testid="stMarkdownContainer"],
     div[data-testid="stElementContainer"]:has(.nav-mark) + div div.stButton > button [data-testid="stMarkdownContainer"] p {
-      white-space:nowrap !important; overflow:visible !important; text-overflow:clip !important;
+      white-space:normal !important; overflow:visible !important; text-overflow:clip !important;
       font-size:.9rem !important; color:var(--ink) !important; text-align:center !important;
       width:100% !important; margin:0 !important;}
     @media (max-width:640px) {
@@ -224,6 +224,20 @@ st.markdown(
         word-break:keep-all; overflow-wrap:break-word; line-break:strict;}
       .qbox .stem {word-break:keep-all; overflow-wrap:break-word; line-break:strict;}
       .codebox {font-size:clamp(2rem, 12vw, 2.6rem); padding:16px 12px;}
+      /* 폰: 버튼 글자 잘림·효과 과다 완화 */
+      div.stButton > button [data-testid="stMarkdownContainer"] p,
+      div.stFormSubmitButton > button [data-testid="stMarkdownContainer"] p,
+      div.stLinkButton > a [data-testid="stMarkdownContainer"] p {
+        white-space:normal !important; overflow:visible !important; text-overflow:clip !important;
+        font-size:clamp(.88rem, 3.6vw, .95rem) !important;}
+      div.stLinkButton > a {white-space:normal !important;}
+      .fx-spark {display:none;}
+      .fx-ring {display:none;}
+      .fx-pop b {font-size:1.55rem !important;}
+      .fx-pop.hot b, .fx-pop.big b {font-size:1.75rem !important;}
+      .fx-pop span {font-size:.9rem !important;}
+      .fx-flash {animation-duration:.65s;}
+      .fx-pop {animation-duration:.85s; top:22%;}
     }
     header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecoration"],
     .stAppDeployButton, #MainMenu, footer {display:none !important;}
@@ -420,13 +434,23 @@ st.markdown(
     div.stFormSubmitButton > button > div > span {
       max-width:100% !important; white-space:normal !important; overflow:visible !important;
       word-break:keep-all !important;}
-    /* 짧은 액션(홈·방 열기·요지·원문)은 한 줄 유지 */
+    /* 짧은 액션도 잘리지 않게. 좁은 칸에서 nowrap+ellipsis → 홍…/뒤… 되는 것 방지 */
+    div.stButton > button,
+    div.stFormSubmitButton > button,
+    div.stLinkButton > a,
+    a[data-testid="stBaseLinkButton"] {
+      text-overflow:clip !important; overflow:visible !important;}
+    div.stButton > button *,
+    div.stFormSubmitButton > button *,
+    div.stLinkButton > a *,
+    a[data-testid="stBaseLinkButton"] * {
+      text-overflow:clip !important;}
     div.stButton > button[kind="primary"] [data-testid="stMarkdownContainer"] p,
     div.stFormSubmitButton > button[kind="primary"] [data-testid="stMarkdownContainer"] p {
-      color:#fff !important; text-align:center !important; white-space:nowrap !important;}
+      color:#fff !important; text-align:center !important; white-space:normal !important;}
     div.stLinkButton > a [data-testid="stMarkdownContainer"] p,
     a[data-testid="stBaseLinkButton"] p {
-      text-align:center !important; white-space:nowrap !important;}
+      text-align:center !important; white-space:normal !important;}
     /* 객관식 보기(secondary + choice-mark)만 왼쪽 정렬. 그 외 secondary(뒤로·홈)는 가운데 */
     div.stButton > button[kind="secondary"] {background:var(--card); justify-content:center !important;
       color:var(--ink) !important;}
@@ -460,7 +484,7 @@ st.markdown(
       color:#fff !important;}
     div.stLinkButton > a {width:100% !important; border-radius:11px !important;
       min-height:2.8rem; display:inline-flex !important; align-items:center; justify-content:center;
-      padding:.72rem .85rem !important; box-sizing:border-box; white-space:nowrap !important;}
+      padding:.72rem .85rem !important; box-sizing:border-box; white-space:normal !important;}
     div.stButton > button:active {transform:translateY(0);}
 
     div[data-testid="stColumn"] [data-testid="stVerticalBlock"] div.stButton > button[kind="primary"],
@@ -574,6 +598,9 @@ st.markdown(
       100%{opacity:0; transform:translate(var(--dx), var(--dy)) scale(.15);}}
     .hud .chip.hot {animation:hotPulse .55s ease;}
     @keyframes hotPulse {0%{transform:scale(1);} 40%{transform:scale(1.14);} 100%{transform:scale(1);}}
+    /* Streamlit 기본 말줄임(…) 차단 */
+    button p, button span, a[data-testid="stBaseLinkButton"] p {
+      text-overflow:clip !important;}
     </style>
     """,
     unsafe_allow_html=True,
@@ -1321,6 +1348,10 @@ _mark_gate()
 
 # URL view= / 브라우저 뒤로가기 동기화 · 단체전 재접속
 _apply_browser_nav()
+try:
+    sfx.arm_unlock()
+except Exception:
+    pass
 if st.session_state.get("pid"):
     # 시합 중이거나 URL에 방이 있을 때만 pid를 강하게 유지
     if st.session_state.get("phase") in VIEW_LOCK or _qp_one("room"):
@@ -2245,18 +2276,17 @@ def lobby_screen() -> None:
     is_host = pid == room["host_id"]
     if room.get("team_battle"):
         _sect("편 고르기", "누르면 바뀝니다. 방장은 한 번에 갈라 줄 수 있습니다.")
-        cs = st.columns([1, 1, 1.4, 2.6])
-        for i, side in enumerate(rooms.SIDES):
-            with cs[i]:
+        c1, c2 = st.columns(2, gap="small")
+        for col, side in zip((c1, c2), rooms.SIDES):
+            with col:
                 mine = (room["players"].get(pid) or {}).get("side") == side
-                if st.button(side, key=f"side_{side}", type="primary" if mine else "secondary"):
+                if st.button(side, key=f"side_{side}", type="primary" if mine else "secondary", use_container_width=True):
                     rooms.set_side(code, pid, side)
                     st.rerun()
         if is_host:
-            with cs[2]:
-                if st.button("자동 편성", key="auto_side"):
-                    rooms.auto_sides(code, pid)
-                    st.rerun()
+            if st.button("자동 편성", key="auto_side", use_container_width=True):
+                rooms.auto_sides(code, pid)
+                st.rerun()
 
     @st.fragment(run_every=2)
     def wait_peers():
@@ -2280,19 +2310,14 @@ def lobby_screen() -> None:
 
     wait_peers()
     if is_host:
-        s1, _ = st.columns([1.6, 3.4])
-        with s1:
-            if st.button("시작", type="primary"):
-                rooms.start(code, pid)
-                _goto("play")
-                st.rerun()
+        if st.button("시작", type="primary", use_container_width=True):
+            rooms.start(code, pid)
+            _goto("play")
+            st.rerun()
     else:
         st.info("방장이 시작을 누를 때까지 기다리십시오.")
-    st.markdown('<div class="mini-mark"></div>', unsafe_allow_html=True)
-    b1, _ = st.columns([1, 4])
-    with b1:
-        if st.button("← 뒤로가기", key="lobby_back", use_container_width=True):
-            _vs_back_to_enter()
+    if st.button("← 뒤로가기", key="lobby_back", use_container_width=True):
+        _vs_back_to_enter()
     _law_brief()
 
 
@@ -2398,7 +2423,10 @@ def _show_fx() -> None:
     fx = st.session_state.pop("_pending_fx", None)
     pending = st.session_state.pop("_pending_sfx", None)
     if pending:
-        sfx.play(pending[0], pending[1])
+        try:
+            sfx.play(pending[0], pending[1])
+        except Exception:
+            pass
     if not fx:
         return
     ok = bool(fx.get("ok"))
@@ -2411,11 +2439,12 @@ def _show_fx() -> None:
             cls += " hot"
         title = f"{n}연속" if n >= 2 else "맞힘"
         note = "연속으로 맞혔습니다" if n >= 2 else "정답입니다"
+        # 폰에서는 CSS로 spark/ring을 끄므로 가볍게만 넣는다
         sparks = "".join(
             f"<i class='fx-spark' style='--dx:{dx}px;--dy:{dy}px'></i>"
-            for dx, dy in ((-90, -40), (80, -50), (-70, 55), (95, 40), (0, -80), (-40, 70), (50, 75))
+            for dx, dy in ((-70, -35), (75, -45), (0, -70))
         )
-        rings = "<i class='fx-ring'></i>" + ("<i class='fx-ring r2'></i>" if n >= 3 else "")
+        rings = "<i class='fx-ring'></i>" if n >= 3 else ""
         flash = "<div class='fx-flash'></div>"
     else:
         cls = "fx-pop miss"
@@ -2482,11 +2511,8 @@ def done_screen(room: dict, pid: str, deck: list[dict], total: int) -> None:
                 rooms.restart(code, pid, [deck[i] for i in bad])
                 st.rerun()
 
-    st.markdown('<div class="mini-mark"></div>', unsafe_allow_html=True)
-    b1, _ = st.columns([1, 4])
-    with b1:
-        if st.button("나가기", key="done_leave"):
-            _do_leave_to_enter()
+    if st.button("나가기", key="done_leave", use_container_width=True):
+        _do_leave_to_enter()
 
 
 def _turn_banner(room: dict, pid: str, side: str) -> None:
@@ -2550,11 +2576,8 @@ def play_relay(room: dict, pid: str, deck: list[dict], total: int) -> None:
                 show_ranking(live, pid, "실시간 순위")
 
             wait_other()
-        st.markdown('<div class="mini-mark"></div>', unsafe_allow_html=True)
-        b1, _ = st.columns([1, 4])
-        with b1:
-            if st.button("나가기", key="leave_relay_wait"):
-                _ask_leave_quiz()
+        if st.button("나가기", key="leave_relay_wait", use_container_width=True):
+            _ask_leave_quiz()
         return
 
     lim = rooms.limit_sec(room)
@@ -2648,11 +2671,8 @@ def play_relay(room: dict, pid: str, deck: list[dict], total: int) -> None:
 
         wait_turn()
 
-    st.markdown('<div class="mini-mark"></div>', unsafe_allow_html=True)
-    b1, _ = st.columns([1, 4])
-    with b1:
-        if st.button("나가기", key="leave_relay"):
-            _ask_leave_quiz()
+    if st.button("나가기", key="leave_relay", use_container_width=True):
+        _ask_leave_quiz()
     with st.expander("지금 순위 · 교육장 전광판", expanded=False):
         @st.fragment(run_every=2)
         def live_board():
@@ -2739,11 +2759,8 @@ def play_screen() -> None:
         tick()
         if room.get("team_battle"):
             show_teams(room)
-        st.markdown('<div class="mini-mark"></div>', unsafe_allow_html=True)
-        cd1, _ = st.columns([1, 4])
-        with cd1:
-            if st.button("나가기", key="leave_cd"):
-                _ask_leave_quiz()
+        if st.button("나가기", key="leave_cd", use_container_width=True):
+            _ask_leave_quiz()
         return
 
     if rooms.relay_on(room):
@@ -2851,11 +2868,8 @@ def play_screen() -> None:
                 _ask_leave_quiz()
     else:
         st.caption("되돌아갈 수 없습니다. 고르면 바로 다음 문제로 갑니다.")
-        st.markdown('<div class="nav-mark"></div>', unsafe_allow_html=True)
-        b1, _ = st.columns([1, 4])
-        with b1:
-            if st.button("나가기", key="leave_play2", use_container_width=True):
-                _ask_leave_quiz()
+        if st.button("나가기", key="leave_play2", use_container_width=True):
+            _ask_leave_quiz()
 
     with st.expander("지금 순위 · 교육장 전광판", expanded=False):
         @st.fragment(run_every=2)
