@@ -2407,6 +2407,24 @@ def _law_brief() -> None:
         )
 
 
+def _team_streak(room: dict | None, side: str) -> int:
+    """단체전 팀 연속. rooms 모듈 버전과 무관하게 안전하게 읽는다."""
+    if not room or side not in rooms.SIDES:
+        return 0
+    ss = ((room.get("relay") or {}).get("side_streak") or {})
+    try:
+        return int(ss.get(side) or 0)
+    except Exception:
+        return 0
+
+
+def _cheer_n(room: dict | None, pid: str, me: dict | None = None) -> int:
+    me = me or ((room or {}).get("players") or {}).get(pid) or {}
+    if rooms.relay_on(room):
+        return _team_streak(room, me.get("side") or "")
+    return int(me.get("streak") or 0)
+
+
 def _hud(room: dict, me: dict, idx: int, total: int, pos: int, n_players: int, left: float | None, lim: int) -> None:
     pct = int(100 * idx / max(1, total))
     chips = [
@@ -2414,9 +2432,7 @@ def _hud(room: dict, me: dict, idx: int, total: int, pos: int, n_players: int, l
         f"<span class='chip'>점수<b>{int(me.get('points') or 0)}</b></span>",
         f"<span class='chip'>맞힘<b>{int(me.get('score') or 0)}</b></span>",
     ]
-    streak = int(me.get("streak") or 0)
-    if rooms.relay_on(room):
-        streak = rooms.side_streak_of(room, me.get("side") or "")
+    streak = _cheer_n(room, "", me)
     if streak >= 2:
         label = "팀연속" if rooms.relay_on(room) else "연속"
         chips.append(f"<span class='chip hot'>{streak}{label}</span>")
@@ -2477,7 +2493,7 @@ def _react_answer(code: str, pid: str) -> None:
     me = (live.get("players") or {}).get(pid) or {}
     hist = me.get("history") or []
     ok = bool(hist[-1].get("ok")) if hist else False
-    _cheer(ok, rooms.cheer_streak(live, pid))
+    _cheer(ok, _cheer_n(live, pid, me))
 
 
 def _show_fx() -> None:
