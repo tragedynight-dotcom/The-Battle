@@ -102,6 +102,19 @@ st.markdown(
     div[data-testid="stRadio"] > div {
       gap: 0.35rem !important;
     }
+    /* 같은 창 이동 링크(판례·개정 뒤로가기용). 학습하기 외부 링크만 새 탭 */
+    .battle-nav-wrap {margin:0.35rem 0 0.55rem 0; width:100%;}
+    a.battle-nav {
+      display:flex !important; align-items:center; justify-content:center;
+      width:100%; min-height:2.8rem; padding:0.72rem 0.85rem; box-sizing:border-box;
+      border-radius:11px; border:1px solid var(--line);
+      background:var(--card); color:var(--ink) !important;
+      font-weight:650; font-size:.95rem; text-decoration:none !important;
+      line-height:1.35; word-break:keep-all;}
+    a.battle-nav.primary {
+      background:var(--navy) !important; color:#fff !important; border-color:var(--navy) !important;}
+    a.battle-nav:hover {border-color:var(--navy-2); background:#f5f7fa;}
+    a.battle-nav.primary:hover {background:var(--navy-2) !important; border-color:var(--navy-2) !important;}
     .stApp {
       background:
         radial-gradient(800px 360px at 12% -8%, rgba(226,85,61,.07), transparent 55%),
@@ -569,6 +582,7 @@ st.markdown(
 GATE_PASSWORD = "12345678"
 RANK_RESET_PASSWORDS = frozenset({"rlawhdtjs1^", "whdtjs12^"})
 GATE_STORE = "thebattle_gate_v1"
+PID_STORE = "thebattle_pid_v1"
 GATE_TTL_SEC = 12 * 60 * 60  # 활동 기준 12시간 (새로고침 유지, 영구 출입 방지)
 
 
@@ -599,6 +613,13 @@ def _cookie_gate_on() -> bool:
         return False
 
 
+def _cookie_pid() -> str:
+    try:
+        return str(st.context.cookies.get(PID_STORE) or "").strip()
+    except Exception:
+        return ""
+
+
 def _gate_js(script: str) -> None:
     import streamlit.components.v1 as components
 
@@ -613,6 +634,7 @@ def _gate_js(script: str) -> None:
 # lobby/play 시합 중에는 session phase를 유지하고 URL만 되돌린다.
 VIEW_FREE = frozenset({"hub", "cases", "laws", "enter", "host_setup"})
 VIEW_LOCK = frozenset({"lobby", "play"})
+ROOM_LIVE = frozenset({"lobby", "countdown", "play", "done"})
 
 
 def _qp_one(name: str) -> str:
@@ -625,11 +647,14 @@ def _qp_one(name: str) -> str:
 
 
 def _app_href(view: str, *, keep_room: bool = False, **extra: str) -> str:
-    """실제 <a> 이동용 URL. replaceState가 아니라 브라우저 히스토리가 쌓인다."""
+    """같은 창 <a> 이동용 URL. 히스토리가 쌓여 브라우저 뒤로가기가 동작한다."""
     q: dict[str, str] = {"view": view}
     inn = _qp_one("in")
     if inn:
         q["in"] = inn
+    pid = _qp_one("pid") or str(st.session_state.get("pid") or "").strip()
+    if pid:
+        q["pid"] = pid
     if keep_room:
         room = _qp_one("room") or str(st.session_state.get("code") or "").strip()
         if room:
@@ -640,17 +665,71 @@ def _app_href(view: str, *, keep_room: bool = False, **extra: str) -> str:
     return "?" + urlencode(q)
 
 
+def _nav_link(label: str, href: str, *, primary: bool = False) -> None:
+    """앱 안 이동(학습하기 외부 링크 제외). target=_top → 같은 창 전체 이동 + 뒤로가기."""
+    cls = "battle-nav primary" if primary else "battle-nav"
+    st.markdown(
+        f'<div class="battle-nav-wrap"><a class="{cls}" href="{html.escape(href, quote=True)}" '
+        f'target="_top" rel="noopener">{html.escape(label)}</a></div>',
+        unsafe_allow_html=True,
+    )
+
+
+def _persist_pid(pid: str) -> None:
+    """단체전 튕김 대비: 참가자 id를 URL·쿠키에 남긴다."""
+    pid = (pid or "").strip()
+    if not pid:
+        return
+    st.query_params["pid"] = pid
+    _gate_js(
+        f"""
+        var KEY = "{PID_STORE}";
+        var w = window.parent;
+        try {{ if (window.top && window.top.location) w = window.top; }} catch (e) {{}}
+        try {{
+          var secure = (w.location.protocol === "https:") ? "; Secure" : "";
+          w.document.cookie = KEY + "={pid}; path=/; max-age={7 * 24 * 3600}; SameSite=Lax" + secure;
+        }} catch (e) {{}}
+        try {{ w.sessionStorage.setItem(KEY, "{pid}"); }} catch (e) {{}}
+        """
+    )
+
+
+def _restore_player_from_room(room: dict, pid: str) -> None:
+    me = (room.get("players") or {}).get(pid) or {}
+    if not me:
+        return
+    if not (st.session_state.get("player_name") or "").strip():
+        st.session_state.player_name = (me.get("name") or "").strip()
+    if not st.session_state.get("my_org") and me.get("org"):
+        st.session_state.my_org = dict(me.get("org") or {})
+
+
 def _goto(phase: str) -> None:
-    """세션 화면 전환(+ view 동기화). 자유 화면은 가능하면 link로 이동하는 편이 뒤로가기에 유리하다."""
+    """세션 화면 전환(+ view 동기화). 판례·개정 상세는 _nav_link로 히스토리를 쌓는다."""
     st.session_state.phase = phase
     if phase == "gate":
         return
     st.query_params["view"] = phase
+    if st.session_state.get("pid"):
+        st.query_params["pid"] = st.session_state.pid
+    if phase == "hub":
+        st.session_state.pop("code", None)
+        _clear_param("room")
+        _clear_param("case")
+        _clear_param("law")
+        st.session_state.case_open = ""
+        st.session_state.law_open = ""
+    elif phase == "cases":
+        _clear_param("law")
+        st.session_state.law_open = ""
+    elif phase == "laws":
+        _clear_param("case")
+        st.session_state.case_open = ""
 
 
 def _apply_browser_nav() -> None:
-    """URL ?view= 가 자유 화면의 기준. 시합 중에는 뒤로가기로 나가도 시합에 머문다."""
-    # 예전 잠금 스크립트가 탭에 남아 있으면 무조건 해제
+    """URL view/case/law/room 기준 복구. 시합 중 새로고침은 방으로 복귀."""
     _gate_js(
         """
         var w = window.parent;
@@ -664,35 +743,78 @@ def _apply_browser_nav() -> None:
     if kind in ("exam", "ox"):
         st.session_state.quiz_kind = kind
 
-    phase = st.session_state.get("phase") or "hub"
+    code = _qp_one("room") or str(st.session_state.get("code") or "").strip()
     view = _qp_one("view")
+    phase = st.session_state.get("phase") or "hub"
+    pid = str(st.session_state.get("pid") or "").strip()
 
-    if phase in VIEW_LOCK:
-        code = str(st.session_state.get("code") or "").strip()
-        if view != phase:
-            st.query_params["view"] = phase
-        if code and _qp_one("room") != code:
-            st.query_params["room"] = code
+    # 진행·대기 중인 방: 이미 참가한 pid이거나 시합 화면이면 복귀 (튕김·새로고침)
+    if code:
+        room = rooms.load(code)
+        if room and room.get("status") in ROOM_LIVE:
+            players = room.get("players") or {}
+            in_room = bool(pid and pid in players)
+            want_lock = view in VIEW_LOCK or phase in VIEW_LOCK or in_room
+            if want_lock and (in_room or phase in VIEW_LOCK or view in VIEW_LOCK):
+                rejoined = phase not in VIEW_LOCK
+                st.session_state.code = code
+                st.session_state.phase = "lobby" if room.get("status") == "lobby" else "play"
+                st.query_params["view"] = st.session_state.phase
+                st.query_params["room"] = code
+                if pid:
+                    _persist_pid(pid)
+                    _restore_player_from_room(room, pid)
+                if rejoined and in_room:
+                    st.session_state._rejoined = True
+                return
+            # 초대 링크만 있고 아직 미참가 → 아래에서 enter 처리
+
+    if phase in VIEW_LOCK and st.session_state.get("code"):
+        live = rooms.load(str(st.session_state.get("code") or ""))
+        if live and live.get("status") in ROOM_LIVE:
+            if view != phase:
+                st.query_params["view"] = phase
+            st.query_params["room"] = str(st.session_state.code)
+            if pid:
+                _persist_pid(pid)
+            return
+        st.session_state.pop("code", None)
+        st.session_state.phase = "enter"
+        st.query_params["view"] = "enter"
         return
 
-    # URL에 view가 있으면 그게 화면 (브라우저 뒤로가기 포함)
     if view in VIEW_FREE:
         st.session_state.phase = view
         if view == "hub":
             st.session_state.pop("code", None)
             _clear_param("room")
+            _clear_param("case")
+            _clear_param("law")
+            st.session_state.case_open = ""
+            st.session_state.law_open = ""
+        elif view == "cases":
+            _clear_param("law")
+            st.session_state.law_open = ""
+            st.session_state.case_open = _qp_one("case")
+        elif view == "laws":
+            _clear_param("case")
+            st.session_state.case_open = ""
+            st.session_state.law_open = _qp_one("law")
         return
 
-    # view 없음 + 방 번호 링크 → 입장
+    # view 없음 + 방 번호만(대기 전 초대 링크) → 입장
     if _qp_one("room"):
         st.session_state.phase = "enter"
         st.query_params["view"] = "enter"
         return
 
-    # view 없음 → 홈 (뒤로가기로 파라미터가 빠진 경우 포함)
     st.session_state.phase = "hub"
     st.session_state.pop("code", None)
     _clear_param("room")
+    _clear_param("case")
+    _clear_param("law")
+    st.session_state.case_open = ""
+    st.session_state.law_open = ""
     st.query_params["view"] = "hub"
 
 
@@ -785,7 +907,8 @@ def _bridge_gate_from_storage() -> None:
 
 
 if "pid" not in st.session_state:
-    st.session_state.pid = uuid.uuid4().hex[:10]
+    restored = _qp_one("pid") or _cookie_pid()
+    st.session_state.pid = restored if len(restored) >= 8 else uuid.uuid4().hex[:10]
 if "phase" not in st.session_state:
     st.session_state.phase = "hub"
 if "unlocked" not in st.session_state:
@@ -907,8 +1030,12 @@ if not st.session_state.unlocked:
 # 쓰는 동안 만료를 밀어 새로고침·연속 사용 시 끊기지 않게 한다.
 _mark_gate()
 
-# URL view= / 브라우저 뒤로가기 동기화
+# URL view= / 브라우저 뒤로가기 동기화 · 단체전 재접속
 _apply_browser_nav()
+if st.session_state.get("pid"):
+    # 시합 중이거나 URL에 방이 있을 때만 pid를 강하게 유지
+    if st.session_state.get("phase") in VIEW_LOCK or _qp_one("room"):
+        _persist_pid(st.session_state.pid)
 
 choices = area_choices()
 labels = [c[1] for c in choices]
@@ -1202,6 +1329,7 @@ def _go_room(room: dict) -> None:
     if room.get("kind") == "ox" or deck0.get("ox") or deck0.get("kind") == "num":
         st.session_state.quiz_kind = "ox"
     st.query_params["room"] = room["code"]
+    _persist_pid(st.session_state.pid)
     _goto("lobby" if room.get("status") == "lobby" else "play")
     st.rerun()
 
@@ -1310,9 +1438,7 @@ def hub_screen() -> None:
                 "음주운전·폭행·가정폭력 등 현장 쟁점으로 법제처 공식 판례만 제공",
                 "05",
             )
-            if st.button("최신판례 열기", type="primary", key="hub_case", use_container_width=True):
-                _goto("cases")
-                st.rerun()
+            _nav_link("최신판례 열기", _app_href("cases"), primary=True)
     with r2b:
         with st.container(border=True):
             _svc_card(
@@ -1320,9 +1446,7 @@ def hub_screen() -> None:
                 "경찰청 소관 법령의 공포·시행·제개정만 제공",
                 "06",
             )
-            if st.button("법률개정 열기", type="primary", key="hub_law", use_container_width=True):
-                _goto("laws")
-                st.rerun()
+            _nav_link("법률개정 열기", _app_href("laws"), primary=True)
     st.caption("최신판례·법률개정은 법제처 원문 그대로 공식 자료만 제공")
     _sect("랭킹", "누적과 단일(한 판 최고)을 나눠 봅니다. 종목·방식별로 10위까지 공개합니다.")
     rank_scope = st.radio(
@@ -1378,10 +1502,12 @@ def hub_screen() -> None:
 
 
 def cases_screen() -> None:
-    if st.button("← 홈으로", key="cases_back_hub", use_container_width=True):
-        _goto("hub")
-        st.rerun()
-        return
+    open_id = _qp_one("case") or st.session_state.get("case_open") or ""
+    st.session_state.case_open = open_id
+    if open_id:
+        _nav_link("← 목록으로", _app_href("cases"))
+    else:
+        _nav_link("← 홈으로", _app_href("hub"))
     st.caption("출처: 법제처 국가법령정보 공동활용. 직무·교통·형사·보호 쟁점으로 대법원 공식 판례만 가져옵니다.")
     labels = [t[0] for t in precedent.FIELD_TOPICS]
     pick = st.selectbox("쟁점", labels, key="case_topic")
@@ -1393,8 +1519,12 @@ def cases_screen() -> None:
             query = spec.get("query") or ""
             break
     if st.session_state.get("case_topic_prev") != pick:
-        st.session_state.case_open = ""
         st.session_state.case_topic_prev = pick
+        if open_id:
+            st.session_state.case_open = ""
+            _clear_param("case")
+            st.rerun()
+            return
     criminal_only = st.checkbox("형사만 보기", value=True, key="case_criminal", help="국가배상 등 민사는 끄면 같이 나옵니다.")
     oc = _law_oc()
     if not oc:
@@ -1412,7 +1542,6 @@ def cases_screen() -> None:
         st.warning("이 쟁점으로 가져온 공식 판례가 없습니다.")
         return
     st.write(f"**{pick}** · 공식 {total}건 가운데 {len(rows)}건")
-    open_id = st.session_state.get("case_open") or ""
     for row in rows:
         name = html.escape(glue_kr(row.get("사건명") or ""))
         meta = html.escape(
@@ -1426,14 +1555,6 @@ def cases_screen() -> None:
             unsafe_allow_html=True,
         )
         rid = row.get("id") or ""
-        if st.button("요지 보기", key=f"case_open_{rid}", use_container_width=True):
-            st.session_state.case_open = rid
-            st.rerun()
-        st.link_button(
-            "원문 보기",
-            precedent.official_link(rid, row.get("사건번호") or ""),
-            use_container_width=True,
-        )
         if open_id and rid and open_id == rid:
             detail = _cached_detail(oc, rid)
             if not detail:
@@ -1447,13 +1568,22 @@ def cases_screen() -> None:
                     st.write(glue_kr(detail["판결요지"][:1800]))
                 if detail.get("참조조문"):
                     st.caption("참조조문: " + glue_kr(detail["참조조문"][:400]))
-
+            _nav_link("← 목록으로", _app_href("cases"))
+        else:
+            _nav_link("요지 보기", _app_href("cases", case=rid), primary=True)
+        st.link_button(
+            "원문 보기",
+            precedent.official_link(rid, row.get("사건번호") or ""),
+            use_container_width=True,
+        )
 
 def laws_screen() -> None:
-    if st.button("← 홈으로", key="laws_back_hub", use_container_width=True):
-        _goto("hub")
-        st.rerun()
-        return
+    open_id = _qp_one("law") or st.session_state.get("law_open") or ""
+    st.session_state.law_open = open_id
+    if open_id:
+        _nav_link("← 목록으로", _app_href("laws"))
+    else:
+        _nav_link("← 홈으로", _app_href("hub"))
     st.caption("출처: 법제처. 소관부처 코드 경찰청(1320000)만 조회합니다. 개정 이유는 공식 제개정이유만 보여 줍니다.")
     hide_org = st.checkbox("직제는 빼기", value=True, key="law_hide_org")
     oc = _law_oc()
@@ -1471,7 +1601,6 @@ def laws_screen() -> None:
         st.warning("경찰청 소관으로 가져온 법령이 없습니다.")
         return
     st.write(f"**경찰청 소관** · 공식 {total}건 가운데 {len(rows)}건 · 공포일 최근순")
-    open_id = st.session_state.get("law_open") or ""
     for row in rows:
         name = html.escape(glue_kr(row.get("법령명") or ""))
         bits = [row.get("제개정") or "", row.get("법령구분") or "", row.get("소관부처") or ""]
@@ -1494,14 +1623,6 @@ def laws_screen() -> None:
             unsafe_allow_html=True,
         )
         rid = row.get("id") or ""
-        if st.button("개정 이유", key=f"law_open_{rid}", use_container_width=True):
-            st.session_state.law_open = rid
-            st.rerun()
-        st.link_button(
-            "원문 보기",
-            precedent.official_law_link(rid, row.get("법령명") or ""),
-            use_container_width=True,
-        )
         if open_id and rid and open_id == rid:
             detail = _cached_amend(oc, rid)
             reason = (detail.get("제개정이유") or "").strip()
@@ -1510,7 +1631,14 @@ def laws_screen() -> None:
             else:
                 st.write("**제개정이유**")
                 st.write(glue_kr(reason[:2000]))
-
+            _nav_link("← 목록으로", _app_href("laws"))
+        else:
+            _nav_link("개정 이유", _app_href("laws", law=rid), primary=True)
+        st.link_button(
+            "원문 보기",
+            precedent.official_law_link(rid, row.get("법령명") or ""),
+            use_container_width=True,
+        )
 
 @st.cache_data(ttl=1800)
 def _cached_prec(oc: str, jo: str, query: str) -> tuple[list[dict], int]:
@@ -1571,6 +1699,8 @@ def enter_screen() -> None:
                 st.error("방이 없습니다. 번호를 확인하십시오.")
             else:
                 st.session_state.my_org = org
+                st.session_state.player_name = name
+                _persist_pid(st.session_state.pid)
                 _go_room(room)
 
 
@@ -1703,6 +1833,9 @@ def lobby_screen() -> None:
         st.rerun()
         return
     pid = st.session_state.pid
+    _persist_pid(pid)
+    if st.session_state.pop("_rejoined", False):
+        st.info("연결이 끊겼다가 같은 방으로 다시 들어왔습니다.")
     mode = rooms.mode_of(room)
     lim = rooms.limit_sec(room)
     st.caption(_org_caption(room, pid))
@@ -2131,7 +2264,11 @@ def play_screen() -> None:
         return
     room = rooms.begin_if_due(code) or room
     pid = st.session_state.pid
+    _persist_pid(pid)
+    if st.session_state.pop("_rejoined", False):
+        st.info("연결이 끊겼다가 같은 방으로 다시 들어왔습니다. 이전 답안을 이어서 푸시면 됩니다.")
     if pid not in room["players"]:
+        st.warning("이 기기의 참가 기록이 방에 없습니다. 같은 별명으로 다시 합류합니다. 이전 답안은 이어지지 않을 수 있습니다.")
         rooms.join(
             code,
             pid,
