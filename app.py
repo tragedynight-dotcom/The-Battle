@@ -647,7 +647,7 @@ def _qp_one(name: str) -> str:
 
 
 def _app_href(view: str, *, keep_room: bool = False, **extra: str) -> str:
-    """같은 창 <a> 이동용 URL. 히스토리가 쌓여 브라우저 뒤로가기가 동작한다."""
+    """자유 화면 URL. 히스토리 push / 공유용."""
     q: dict[str, str] = {"view": view}
     inn = _qp_one("in")
     if inn:
@@ -665,54 +665,71 @@ def _app_href(view: str, *, keep_room: bool = False, **extra: str) -> str:
     return "?" + urlencode(q)
 
 
-def _nav_link(label: str, href: str, *, primary: bool = False) -> None:
-    """앱 안 이동. 마크다운 <a>는 Streamlit이 새 탭으로 바꿔서, top 창 location으로만 이동한다."""
-    import streamlit.components.v1 as components
-
-    bg = "#1c2430" if primary else "#ffffff"
-    fg = "#ffffff" if primary else "#1c2430"
-    border = "#1c2430" if primary else "rgba(28,36,48,.14)"
-    safe_href = html.escape(href, quote=True)
-    safe_label = html.escape(label)
-    nid = "n" + uuid.uuid4().hex[:12]
-    components.html(
+def _push_history(href: str) -> None:
+    """부모 창 history에 쌓아 브라우저 뒤로가기가 먹히게 한다."""
+    if not href.startswith("?"):
+        href = "?" + href
+    _gate_js(
         f"""
-        <div style="margin:0;width:100%;box-sizing:border-box;">
-          <a id="{nid}" href="{safe_href}"
-             style="display:flex;align-items:center;justify-content:center;width:100%;
-                    min-height:2.8rem;padding:0.72rem 0.85rem;box-sizing:border-box;
-                    border-radius:11px;border:1px solid {border};background:{bg};color:{fg};
-                    font-weight:650;font-size:.95rem;text-decoration:none;line-height:1.35;
-                    word-break:keep-all;font-family:inherit;">
-            {safe_label}
-          </a>
-        </div>
-        <script>
-        (function(){{
-          var a = document.getElementById("{nid}");
-          if (!a) return;
-          a.addEventListener("click", function(e){{
-            e.preventDefault();
-            e.stopPropagation();
-            var w = window.parent;
-            try {{ if (window.top && window.top.location) w = window.top; }} catch (err) {{}}
-            var href = a.getAttribute("href") || "";
-            try {{
-              if (href.charAt(0) === "?") {{
-                w.location.assign(w.location.pathname + href);
-              }} else {{
-                w.location.assign(href);
-              }}
-            }} catch (err) {{
-              try {{ w.location.href = (href.charAt(0) === "?" ? w.location.pathname + href : href); }} catch (e2) {{}}
-            }}
-            return false;
-          }});
-        }})();
-        </script>
-        """,
-        height=56,
+        var w = window.parent;
+        try {{ if (window.top && window.top.location) w = window.top; }} catch (e) {{}}
+        try {{
+          var next = w.location.pathname + "{href}";
+          if ((w.location.pathname + w.location.search) !== next) {{
+            w.history.pushState({{battleNav: 1}}, "", next);
+          }}
+          if (!w.__battlePopBound) {{
+            w.__battlePopBound = true;
+            w.addEventListener("popstate", function () {{
+              try {{ w.location.replace(w.location.href); }} catch (e) {{}}
+            }});
+          }}
+        }} catch (e) {{}}
+        """
     )
+
+
+def _open_view(view: str, **extra: str) -> None:
+    """같은 탭 버튼 이동. case/law는 URL에 넣어 뒤로가기 시 목록·홈으로 돌아간다."""
+    st.session_state.phase = view
+    st.query_params["view"] = view
+    if st.session_state.get("pid"):
+        st.query_params["pid"] = st.session_state.pid
+
+    if view == "hub":
+        st.session_state.pop("code", None)
+        _clear_param("room")
+        _clear_param("case")
+        _clear_param("law")
+        st.session_state.case_open = ""
+        st.session_state.law_open = ""
+        extra = {}
+    elif view == "cases":
+        _clear_param("law")
+        st.session_state.law_open = ""
+        case_id = str(extra.get("case") or "").strip()
+        st.session_state.case_open = case_id
+        if case_id:
+            st.query_params["case"] = case_id
+            extra = {"case": case_id}
+        else:
+            _clear_param("case")
+            extra = {}
+    elif view == "laws":
+        _clear_param("case")
+        st.session_state.case_open = ""
+        law_id = str(extra.get("law") or "").strip()
+        st.session_state.law_open = law_id
+        if law_id:
+            st.query_params["law"] = law_id
+            extra = {"law": law_id}
+        else:
+            _clear_param("law")
+            extra = {}
+    else:
+        extra = {k: str(v) for k, v in extra.items() if v}
+
+    _push_history(_app_href(view, **extra))
 
 
 def _persist_pid(pid: str) -> None:
@@ -746,7 +763,7 @@ def _restore_player_from_room(room: dict, pid: str) -> None:
 
 
 def _goto(phase: str) -> None:
-    """세션 화면 전환(+ view 동기화). 판례·개정 상세는 _nav_link로 히스토리를 쌓는다."""
+    """세션 화면 전환(+ view 동기화). 판례·개정 상세는 _open_view로 히스토리를 쌓는다."""
     st.session_state.phase = phase
     if phase == "gate":
         return
@@ -1478,7 +1495,9 @@ def hub_screen() -> None:
                 "음주운전·폭행·가정폭력 등 현장 쟁점으로 법제처 공식 판례만 제공",
                 "05",
             )
-            _nav_link("최신판례 열기", _app_href("cases"), primary=True)
+            if st.button("최신판례 열기", type="primary", key="hub_case", use_container_width=True):
+                _open_view("cases")
+                st.rerun()
     with r2b:
         with st.container(border=True):
             _svc_card(
@@ -1486,7 +1505,9 @@ def hub_screen() -> None:
                 "경찰청 소관 법령의 공포·시행·제개정만 제공",
                 "06",
             )
-            _nav_link("법률개정 열기", _app_href("laws"), primary=True)
+            if st.button("법률개정 열기", type="primary", key="hub_law", use_container_width=True):
+                _open_view("laws")
+                st.rerun()
     st.caption("최신판례·법률개정은 법제처 원문 그대로 공식 자료만 제공")
     _sect("랭킹", "누적과 단일(한 판 최고)을 나눠 봅니다. 종목·방식별로 10위까지 공개합니다.")
     rank_scope = st.radio(
@@ -1545,9 +1566,15 @@ def cases_screen() -> None:
     open_id = _qp_one("case") or st.session_state.get("case_open") or ""
     st.session_state.case_open = open_id
     if open_id:
-        _nav_link("← 목록으로", _app_href("cases"))
+        if st.button("← 목록으로", key="cases_back_list", use_container_width=True):
+            _open_view("cases")
+            st.rerun()
+            return
     else:
-        _nav_link("← 홈으로", _app_href("hub"))
+        if st.button("← 홈으로", key="cases_back_hub", use_container_width=True):
+            _open_view("hub")
+            st.rerun()
+            return
     st.caption("출처: 법제처 국가법령정보 공동활용. 직무·교통·형사·보호 쟁점으로 대법원 공식 판례만 가져옵니다.")
     labels = [t[0] for t in precedent.FIELD_TOPICS]
     pick = st.selectbox("쟁점", labels, key="case_topic")
@@ -1608,9 +1635,13 @@ def cases_screen() -> None:
                     st.write(glue_kr(detail["판결요지"][:1800]))
                 if detail.get("참조조문"):
                     st.caption("참조조문: " + glue_kr(detail["참조조문"][:400]))
-            _nav_link("← 목록으로", _app_href("cases"))
+            if st.button("← 목록으로", key=f"case_close_{rid}", use_container_width=True):
+                _open_view("cases")
+                st.rerun()
         else:
-            _nav_link("요지 보기", _app_href("cases", case=rid), primary=True)
+            if st.button("요지 보기", type="primary", key=f"case_open_{rid}", use_container_width=True):
+                _open_view("cases", case=rid)
+                st.rerun()
         st.link_button(
             "원문 보기",
             precedent.official_link(rid, row.get("사건번호") or ""),
@@ -1621,9 +1652,15 @@ def laws_screen() -> None:
     open_id = _qp_one("law") or st.session_state.get("law_open") or ""
     st.session_state.law_open = open_id
     if open_id:
-        _nav_link("← 목록으로", _app_href("laws"))
+        if st.button("← 목록으로", key="laws_back_list", use_container_width=True):
+            _open_view("laws")
+            st.rerun()
+            return
     else:
-        _nav_link("← 홈으로", _app_href("hub"))
+        if st.button("← 홈으로", key="laws_back_hub", use_container_width=True):
+            _open_view("hub")
+            st.rerun()
+            return
     st.caption("출처: 법제처. 소관부처 코드 경찰청(1320000)만 조회합니다. 개정 이유는 공식 제개정이유만 보여 줍니다.")
     hide_org = st.checkbox("직제는 빼기", value=True, key="law_hide_org")
     oc = _law_oc()
@@ -1671,9 +1708,13 @@ def laws_screen() -> None:
             else:
                 st.write("**제개정이유**")
                 st.write(glue_kr(reason[:2000]))
-            _nav_link("← 목록으로", _app_href("laws"))
+            if st.button("← 목록으로", key=f"law_close_{rid}", use_container_width=True):
+                _open_view("laws")
+                st.rerun()
         else:
-            _nav_link("개정 이유", _app_href("laws", law=rid), primary=True)
+            if st.button("개정 이유", type="primary", key=f"law_open_{rid}", use_container_width=True):
+                _open_view("laws", law=rid)
+                st.rerun()
         st.link_button(
             "원문 보기",
             precedent.official_law_link(rid, row.get("법령명") or ""),
