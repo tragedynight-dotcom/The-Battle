@@ -668,60 +668,99 @@ def _app_href(view: str, *, keep_room: bool = False, **extra: str) -> str:
 
 
 def _push_history(href: str) -> None:
-    """앱 iframe history에 쌓는다. (Cloud는 top 껍데기와 /~/+/ 앱이 분리됨)"""
+    """브라우저 뒤로가기용. Streamlit Cloud는 겉 창(top)과 앱 iframe이 갈라져 있어 둘 다 쌓는다."""
     if not href.startswith("?"):
         href = "?" + href
     _gate_js(
         f"""
-        var app = window.parent;
-        try {{
-          if (!app || !app.location || String(app.location.pathname||"").indexOf("/~/+/") < 0) {{
-            if (window.top && window.top.document) {{
-              var f = window.top.document.querySelector('iframe[title=streamlitApp]');
-              if (f && f.contentWindow) app = f.contentWindow;
-            }}
+        (function(){{
+          function appWin() {{
+            var app = window.parent;
+            try {{
+              if (!app || !app.location || String(app.location.pathname||"").indexOf("/~/+/") < 0) {{
+                if (window.top && window.top.document) {{
+                  var f = window.top.document.querySelector('iframe[title=streamlitApp]');
+                  if (f && f.contentWindow) app = f.contentWindow;
+                }}
+              }}
+            }} catch (e) {{}}
+            return app || window;
           }}
-        }} catch (e) {{}}
-        try {{
-          try {{
-            var rm = [];
-            for (var i = 0; i < app.sessionStorage.length; i++) {{
-              var k = app.sessionStorage.key(i);
-              if (k && k.indexOf("battleNavStacked:") === 0) rm.push(k);
-            }}
-            rm.forEach(function (k) {{ app.sessionStorage.removeItem(k); }});
-          }} catch (e) {{}}
-          var next = app.location.pathname + "{href}";
-          if ((app.location.pathname + app.location.search) !== next) {{
-            app.history.pushState({{battleNav: "free"}}, "", next);
+          function pushBoth(href) {{
+            var app = appWin();
+            var nextApp = "";
+            try {{ nextApp = app.location.pathname + href; }} catch (e) {{ return; }}
+            try {{
+              if ((app.location.pathname + app.location.search) !== nextApp) {{
+                app.history.pushState({{battleNav: "free"}}, "", nextApp);
+              }}
+            }} catch (e) {{}}
+            try {{
+              if (window.top && window.top !== app) {{
+                var nextTop = window.top.location.pathname + href;
+                if ((window.top.location.pathname + window.top.location.search) !== nextTop) {{
+                  window.top.history.pushState({{battleNav: "free"}}, "", nextTop);
+                }}
+              }}
+            }} catch (e) {{}}
           }}
-          try {{
-            if (window.top && window.top !== app) {{
-              window.top.history.replaceState({{battleNav: "free"}}, "", window.top.location.pathname + "{href}");
-            }}
-          }} catch (e) {{}}
-        }} catch (e) {{}}
+          pushBoth("{href}");
+        }})();
         """
     )
 
 
-def _goto_free(phase: str) -> None:
-    """홈·입장·방설정 등. 히스토리를 쌓아 브라우저 뒤로가기가 되게 한다."""
-    _goto(phase)
-    _push_history(_app_href(phase))
-
-
 def _stack_detail_history(*, list_href: str, detail_href: str) -> None:
-    """호환용. 실제 스택은 _apply_browser_nav 의 상시 스크립트가 담당한다."""
-    return
+    """요지/개정이유: 목록을 남기고 상세를 한 칸 더 쌓아, 뒤로가면 목록→홈이 되게 한다."""
+    if not list_href.startswith("?"):
+        list_href = "?" + list_href
+    if not detail_href.startswith("?"):
+        detail_href = "?" + detail_href
+    _gate_js(
+        f"""
+        (function(){{
+          function appWin() {{
+            var app = window.parent;
+            try {{
+              if (!app || !app.location || String(app.location.pathname||"").indexOf("/~/+/") < 0) {{
+                if (window.top && window.top.document) {{
+                  var f = window.top.document.querySelector('iframe[title=streamlitApp]');
+                  if (f && f.contentWindow) app = f.contentWindow;
+                }}
+              }}
+            }} catch (e) {{}}
+            return app || window;
+          }}
+          function stack(listHref, detailHref) {{
+            var app = appWin();
+            var key = "battleNavStacked:" + detailHref;
+            try {{
+              if (app.sessionStorage.getItem(key) === "1") return;
+              app.sessionStorage.setItem(key, "1");
+            }} catch (e) {{}}
+            try {{
+              app.history.replaceState({{battleNav: "list"}}, "", app.location.pathname + listHref);
+              app.history.pushState({{battleNav: "detail"}}, "", app.location.pathname + detailHref);
+            }} catch (e) {{}}
+            try {{
+              if (window.top && window.top !== app) {{
+                var base = window.top.location.pathname;
+                window.top.history.replaceState({{battleNav: "list"}}, "", base + listHref);
+                window.top.history.pushState({{battleNav: "detail"}}, "", base + detailHref);
+              }}
+            }} catch (e) {{}}
+          }}
+          stack("{list_href}", "{detail_href}");
+        }})();
+        """
+    )
 
 
 def _open_view(view: str, **extra: str) -> None:
     """같은 탭 버튼 이동. case/law는 URL에 넣어 뒤로가기 시 목록·홈으로 돌아간다."""
     st.session_state.phase = view
     st.query_params["view"] = view
-    if st.session_state.get("pid"):
-        st.query_params["pid"] = st.session_state.pid
+    # pid는 URL에 넣지 않는다 (공유 시 신원 충돌)
 
     if view == "hub":
         st.session_state.pop("code", None)
@@ -842,67 +881,107 @@ def _apply_browser_nav() -> None:
         st.session_state.case_open = ""
         st.session_state.law_open = ""
     game_lock = "true" if (phase_early in VIEW_LOCK or view_early in VIEW_LOCK) else "false"
-    # JS에 직접 넘겨 주소 반영 전에도 목록→상세 스택을 쌓는다.
+    # 겉 창·iframe 모두 popstate 시 주소의 view로 다시 그리게 한다.
     _gate_js(
         f"""
-        var app = window.parent;
-        try {{
-          if (!app || !app.location || String(app.location.pathname||"").indexOf("/~/+/") < 0) {{
-            if (window.top && window.top.document) {{
-              var f = window.top.document.querySelector('iframe[title=streamlitApp]');
-              if (f && f.contentWindow) app = f.contentWindow;
-            }}
-          }}
-        }} catch (e) {{}}
-        try {{ app.__battleLockOn = false; app.__battleNavBoot = false; }} catch (e) {{}}
-        try {{
-          app.__battleGameLock = {game_lock};
-          if (app && app.document && !app.__battlePopV6) {{
-            app.__battlePopV6 = true;
-            var s = app.document.createElement("script");
-            s.textContent = "(function(){{ if (window.__battlePopV6Fn) return; window.__battlePopV6Fn = true; window.addEventListener('popstate', function(){{ try {{ if (window.__battleGameLock) {{ location.reload(); return; }} var q = location.search || ''; if (window.top && window.top !== window && window.top.location.search !== q) {{ window.top.location.replace(window.top.location.pathname + q); return; }} }} catch (e) {{}} try {{ location.reload(); }} catch (e) {{}} }}); }})();";
-            app.document.documentElement.appendChild(s);
-          }}
-          if (app && app.location) {{
-            var forceCase = "{case_now}";
-            var forceLaw = "{law_now}";
-            var u = new URL(app.location.href);
-            if (forceCase) u.searchParams.set("case", forceCase);
-            else u.searchParams.delete("case");
-            if (forceLaw) u.searchParams.set("law", forceLaw);
-            else u.searchParams.delete("law");
-            var hasDetail = !!(forceCase || forceLaw);
-            if (hasDetail) {{
-              var detailUrl = u.pathname + u.search;
-              var shellQ = u.search;
-              u.searchParams.delete("case");
-              u.searchParams.delete("law");
-              var listUrl = u.pathname + u.search;
-              var key = "battleNavStacked:" + detailUrl;
-              try {{
-                if (app.sessionStorage.getItem(key) !== "1") {{
-                  app.sessionStorage.setItem(key, "1");
-                  app.history.replaceState({{battleNav: "list"}}, "", listUrl);
-                  app.history.pushState({{battleNav: "detail"}}, "", detailUrl);
-                  try {{
-                    if (window.top && window.top !== app) {{
-                      window.top.history.replaceState({{battleNav: "detail"}}, "", window.top.location.pathname + shellQ);
-                    }}
-                  }} catch (e) {{}}
+        (function(){{
+          function appWin() {{
+            var app = window.parent;
+            try {{
+              if (!app || !app.location || String(app.location.pathname||"").indexOf("/~/+/") < 0) {{
+                if (window.top && window.top.document) {{
+                  var f = window.top.document.querySelector('iframe[title=streamlitApp]');
+                  if (f && f.contentWindow) app = f.contentWindow;
                 }}
-              }} catch (e) {{}}
-            }} else {{
-              try {{
-                var rm = [];
-                for (var i = 0; i < app.sessionStorage.length; i++) {{
-                  var k = app.sessionStorage.key(i);
-                  if (k && k.indexOf("battleNavStacked:") === 0) rm.push(k);
-                }}
-                rm.forEach(function (k) {{ app.sessionStorage.removeItem(k); }});
-              }} catch (e) {{}}
-            }}
+              }}
+            }} catch (e) {{}}
+            return app || window;
           }}
-        }} catch (e) {{}}
+          function syncFrom(search) {{
+            var app = appWin();
+            try {{
+              var next = app.location.pathname + (search || "");
+              if ((app.location.pathname + app.location.search) !== next) {{
+                app.location.replace(next);
+                return;
+              }}
+            }} catch (e) {{}}
+            try {{ app.location.reload(); }} catch (e) {{}}
+          }}
+          function onPop() {{
+            try {{
+              var app = appWin();
+              if (app && app.__battleGameLock) {{
+                try {{ app.location.reload(); }} catch (e) {{}}
+                return;
+              }}
+            }} catch (e) {{}}
+            var q = "";
+            try {{
+              if (window.top && window.top.location) q = window.top.location.search || "";
+            }} catch (e) {{}}
+            if (!q) {{
+              try {{ q = (appWin().location && appWin().location.search) || ""; }} catch (e) {{}}
+            }}
+            syncFrom(q);
+          }}
+          var app = appWin();
+          try {{ app.__battleGameLock = {game_lock}; }} catch (e) {{}}
+          try {{
+            if (app && !app.__battlePopV7Fn) {{
+              app.__battlePopV7Fn = true;
+              app.addEventListener("popstate", onPop);
+            }}
+          }} catch (e) {{}}
+          try {{
+            if (window.top && !window.top.__battlePopV7Fn) {{
+              window.top.__battlePopV7Fn = true;
+              window.top.addEventListener("popstate", onPop);
+            }}
+          }} catch (e) {{}}
+          try {{
+            if (app && app.location) {{
+              var forceCase = "{case_now}";
+              var forceLaw = "{law_now}";
+              var u = new URL(app.location.href);
+              if (forceCase) u.searchParams.set("case", forceCase);
+              else u.searchParams.delete("case");
+              if (forceLaw) u.searchParams.set("law", forceLaw);
+              else u.searchParams.delete("law");
+              var hasDetail = !!(forceCase || forceLaw);
+              if (hasDetail) {{
+                var detailQ = u.search;
+                u.searchParams.delete("case");
+                u.searchParams.delete("law");
+                var listQ = u.search;
+                var key = "battleNavStacked:" + detailQ;
+                try {{
+                  if (app.sessionStorage.getItem(key) !== "1") {{
+                    app.sessionStorage.setItem(key, "1");
+                    app.history.replaceState({{battleNav: "list"}}, "", app.location.pathname + listQ);
+                    app.history.pushState({{battleNav: "detail"}}, "", app.location.pathname + detailQ);
+                    try {{
+                      if (window.top && window.top !== app) {{
+                        var base = window.top.location.pathname;
+                        window.top.history.replaceState({{battleNav: "list"}}, "", base + listQ);
+                        window.top.history.pushState({{battleNav: "detail"}}, "", base + detailQ);
+                      }}
+                    }} catch (e) {{}}
+                  }}
+                }} catch (e) {{}}
+              }} else {{
+                try {{
+                  var rm = [];
+                  for (var i = 0; i < app.sessionStorage.length; i++) {{
+                    var k = app.sessionStorage.key(i);
+                    if (k && k.indexOf("battleNavStacked:") === 0) rm.push(k);
+                  }}
+                  rm.forEach(function (k) {{ app.sessionStorage.removeItem(k); }});
+                }} catch (e) {{}}
+              }}
+            }}
+          }} catch (e) {{}}
+        }})();
         """
     )
 
