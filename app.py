@@ -368,7 +368,7 @@ st.markdown(
       display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
     .qbox .meta .x2tag {background:#fdf0dd; color:#9a5a12; border:1px solid #f0cf9d;
       border-radius:999px; padding:2px 9px; font-weight:750;}
-    .qbox .stem {white-space:pre-wrap; word-break:keep-all; overflow-wrap:normal; line-break:strict;}
+    .qbox .stem {white-space:normal; word-break:keep-all; overflow-wrap:break-word; line-break:strict;}
     .qbox .ox-ask {margin:0 0 10px; color:var(--muted); font-size:.9rem; word-break:keep-all;}
     .qbox .ox-ctx {margin:0 0 10px; color:#4d5b6e; font-size:.92rem; line-height:1.6; word-break:keep-all;}
     .qbox .ox-say {margin:0; background:#f4f7fb; border:1px solid #d9e1ed; border-radius:12px;
@@ -1267,21 +1267,17 @@ def hub_screen() -> None:
     with r1a:
         with st.container(border=True):
             _svc_card(EXAM_TITLE, EXAM_DESC, "01")
-            st.link_button(
-                "시작하기",
-                _app_href("enter", kind="exam"),
-                type="primary",
-                use_container_width=True,
-            )
+            if st.button("시작하기", type="primary", key="hub_exam", use_container_width=True):
+                st.session_state.quiz_kind = "exam"
+                _goto("enter")
+                st.rerun()
     with r1b:
         with st.container(border=True):
             _svc_card("실무역량평가 OX", OX_DESC, "02")
-            st.link_button(
-                "시작하기",
-                _app_href("enter", kind="ox"),
-                type="primary",
-                use_container_width=True,
-            )
+            if st.button("시작하기", type="primary", key="hub_ox", use_container_width=True):
+                st.session_state.quiz_kind = "ox"
+                _goto("enter")
+                st.rerun()
     _sect("학습하기", "개인 학습·모의고사로 바로 이어집니다.")
     r_learn_a, r_learn_b = st.columns(2, gap="medium")
     with r_learn_a:
@@ -1314,12 +1310,9 @@ def hub_screen() -> None:
                 "음주운전·폭행·가정폭력 등 현장 쟁점으로 법제처 공식 판례만 제공",
                 "05",
             )
-            st.link_button(
-                "최신판례 열기",
-                _app_href("cases"),
-                type="primary",
-                use_container_width=True,
-            )
+            if st.button("최신판례 열기", type="primary", key="hub_case", use_container_width=True):
+                _goto("cases")
+                st.rerun()
     with r2b:
         with st.container(border=True):
             _svc_card(
@@ -1327,12 +1320,9 @@ def hub_screen() -> None:
                 "경찰청 소관 법령의 공포·시행·제개정만 제공",
                 "06",
             )
-            st.link_button(
-                "법률개정 열기",
-                _app_href("laws"),
-                type="primary",
-                use_container_width=True,
-            )
+            if st.button("법률개정 열기", type="primary", key="hub_law", use_container_width=True):
+                _goto("laws")
+                st.rerun()
     st.caption("최신판례·법률개정은 법제처 원문 그대로 공식 자료만 제공")
     _sect("랭킹", "누적과 단일(한 판 최고)을 나눠 봅니다. 종목·방식별로 10위까지 공개합니다.")
     rank_scope = st.radio(
@@ -1388,7 +1378,10 @@ def hub_screen() -> None:
 
 
 def cases_screen() -> None:
-    st.link_button("← 홈으로", _app_href("hub"), use_container_width=True)
+    if st.button("← 홈으로", key="cases_back_hub", use_container_width=True):
+        _goto("hub")
+        st.rerun()
+        return
     st.caption("출처: 법제처 국가법령정보 공동활용. 직무·교통·형사·보호 쟁점으로 대법원 공식 판례만 가져옵니다.")
     labels = [t[0] for t in precedent.FIELD_TOPICS]
     pick = st.selectbox("쟁점", labels, key="case_topic")
@@ -1457,7 +1450,10 @@ def cases_screen() -> None:
 
 
 def laws_screen() -> None:
-    st.link_button("← 홈으로", _app_href("hub"), use_container_width=True)
+    if st.button("← 홈으로", key="laws_back_hub", use_container_width=True):
+        _goto("hub")
+        st.rerun()
+        return
     st.caption("출처: 법제처. 소관부처 코드 경찰청(1320000)만 조회합니다. 개정 이유는 공식 제개정이유만 보여 줍니다.")
     hide_org = st.checkbox("직제는 빼기", value=True, key="law_hide_org")
     oc = _law_oc()
@@ -1537,7 +1533,10 @@ def _cached_amend(oc: str, mst: str) -> dict[str, str]:
 
 
 def enter_screen() -> None:
-    st.link_button("← 홈으로", _app_href("hub"), use_container_width=True)
+    if st.button("← 홈으로", key="enter_back_hub", use_container_width=True):
+        _goto("hub")
+        st.rerun()
+        return
     kind = "실무역량평가 OX" if st.session_state.get("quiz_kind") == "ox" else EXAM_TITLE
     _sect(kind, "시도청·경찰서·지구대·파출소·팀을 고른 뒤, 방을 열거나 방 번호로 들어옵니다.")
     org = pick_org()
@@ -1658,7 +1657,9 @@ def host_setup_screen() -> None:
         st.caption(glue_kr("설명이 맞으면 O, 틀리면 X입니다. 몇 개인지 묻는 문제는 숫자를 넣습니다."))
 
     open_room = st.button("이 설정으로 방 열기", type="primary", use_container_width=True)
-    st.link_button("뒤로", _app_href("enter", kind=st.session_state.get("quiz_kind") or "exam"), use_container_width=True)
+    if st.button("뒤로", key="setup_back", use_container_width=True):
+        _goto("enter")
+        st.rerun()
     if open_room:
         seed = random.randint(1, 10_000_000)
         deck, stored_id, shown = _build_deck(area_id, count, seed, kind)

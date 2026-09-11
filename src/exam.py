@@ -15,6 +15,15 @@ KEEP_LINE = re.compile(r"^[㉠㉡㉢㉣㉤㉥㉦㉧①②③④⑤]")
 ATTACH = re.compile(
     r"^([은는이가을를의과와로에도만며면니다고요여]|으로|에서|에게|하여|하였|했다|한다|되는|하지|하는|된|될|한|할|함)"
 )
+# PDF에서 자주 붙어서 나오는 표현
+SPACE_FIXES = [
+    (re.compile(r"특성중"), "특성 중"),
+    (re.compile(r"대해서가장"), "대해서 가장"),
+    (re.compile(r"으로가장"), "으로 가장"),
+    (re.compile(r"중가장"), "중 가장"),
+    (re.compile(r"에대해서(?=\S)"), "에 대해서"),
+    (re.compile(r"에대해(?=\S)"), "에 대해"),
+]
 
 
 def tidy(text: str) -> str:
@@ -22,30 +31,32 @@ def tidy(text: str) -> str:
     if not text:
         return ""
     text = text.replace("\r\n", "\n").replace("\u00a0", " ").replace("\t", " ")
+    # 빈 줄은 PDF 잘림 잔재라서 버리고, ㉠·① 줄만 문단을 나눈다.
     lines = [ln.strip() for ln in text.split("\n")]
     out: list[str] = []
     for line in lines:
         if not line:
-            if out and out[-1] != "":
-                out.append("")
             continue
-        if KEEP_LINE.match(line) or not out or out[-1] == "":
+        if KEEP_LINE.match(line) or not out:
             out.append(line)
             continue
         prev = out[-1]
-        if re.search(r"[가-힣]$", prev) and re.match(r"[가-힣]", line) and ATTACH.match(line):
+        if re.search(r"[가-힣]$", prev) and re.match(r"[가-힣]", line):
+            last = re.findall(r"[가-힣A-Za-z0-9]+$", prev)
+            last_tok = last[-1] if last else prev
+            # 한두 글자 조각(과/정)이거나 조사·어미로 이어지면 붙여 쓴다.
+            if ATTACH.match(line) or len(last_tok) <= 2:
+                out[-1] = prev + line
+            else:
+                out[-1] = prev + " " + line
+        elif re.search(r"[A-Za-z0-9)]$", prev) and re.match(r"[A-Za-z0-9가-힣(]", line):
             out[-1] = prev + line
         else:
             out[-1] = prev + " " + line
-    cleaned: list[str] = []
-    for x in out:
-        if x == "" and (not cleaned or cleaned[-1] == ""):
-            continue
-        cleaned.append(x)
-    while cleaned and cleaned[-1] == "":
-        cleaned.pop()
-    text = "\n".join(cleaned)
+    text = "\n".join(out)
     text = re.sub(r"[ \t]{2,}", " ", text)
+    for pat, rep in SPACE_FIXES:
+        text = pat.sub(rep, text)
     return text.strip()
 
 
