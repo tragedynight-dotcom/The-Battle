@@ -822,60 +822,68 @@ def _goto(phase: str) -> None:
 
 def _apply_browser_nav() -> None:
     """URL view/case/law/room 기준 복구. 시합 중 새로고침은 방으로 복귀."""
+    case_now = _qp_one("case") or str(st.session_state.get("case_open") or "").strip()
+    law_now = _qp_one("law") or str(st.session_state.get("law_open") or "").strip()
+    # JS에 직접 넘겨 주소 반영 전에도 목록→상세 스택을 쌓는다.
     _gate_js(
-        """
+        f"""
         var app = window.parent;
-        try {
-          if (!app || !app.location || String(app.location.pathname||"").indexOf("/~/+/") < 0) {
-            if (window.top && window.top.document) {
+        try {{
+          if (!app || !app.location || String(app.location.pathname||"").indexOf("/~/+/") < 0) {{
+            if (window.top && window.top.document) {{
               var f = window.top.document.querySelector('iframe[title=streamlitApp]');
               if (f && f.contentWindow) app = f.contentWindow;
-            }
-          }
-        } catch (e) {}
-        try { app.__battleLockOn = false; app.__battleNavBoot = false; } catch (e) {}
-        try {
-          if (app && !app.__battlePopReload) {
+            }}
+          }}
+        }} catch (e) {{}}
+        try {{ app.__battleLockOn = false; app.__battleNavBoot = false; }} catch (e) {{}}
+        try {{
+          if (app && !app.__battlePopReload) {{
             app.__battlePopReload = true;
-            app.addEventListener("popstate", function () {
-              try { app.location.reload(); } catch (e) {}
-            });
-          }
-          // 요지/개정 상세 URL이면 목록→상세 히스토리를 한 번 쌓는다.
-          if (app && app.location) {
-            var s = app.location.search || "";
-            if (s.indexOf("case=") >= 0 || s.indexOf("law=") >= 0) {
-              var u = new URL(app.location.href);
+            app.addEventListener("popstate", function () {{
+              try {{ app.location.reload(); }} catch (e) {{}}
+            }});
+          }}
+          if (app && app.location) {{
+            var forceCase = "{case_now}";
+            var forceLaw = "{law_now}";
+            var u = new URL(app.location.href);
+            if (forceCase) u.searchParams.set("case", forceCase);
+            else u.searchParams.delete("case");
+            if (forceLaw) u.searchParams.set("law", forceLaw);
+            else u.searchParams.delete("law");
+            var hasDetail = !!(forceCase || forceLaw);
+            if (hasDetail) {{
               var detailUrl = u.pathname + u.search;
               var shellQ = u.search;
               u.searchParams.delete("case");
               u.searchParams.delete("law");
               var listUrl = u.pathname + u.search;
               var key = "battleNavStacked:" + detailUrl;
-              try {
-                if (app.sessionStorage.getItem(key) !== "1") {
+              try {{
+                if (app.sessionStorage.getItem(key) !== "1") {{
                   app.sessionStorage.setItem(key, "1");
-                  app.history.replaceState({battleNav: "list"}, "", listUrl);
-                  app.history.pushState({battleNav: "detail"}, "", detailUrl);
-                  try {
-                    if (window.top && window.top !== app) {
-                      window.top.history.replaceState({battleNav: "detail"}, "", window.top.location.pathname + shellQ);
-                    }
-                  } catch (e) {}
-                }
-              } catch (e) {}
-            } else {
-              try {
+                  app.history.replaceState({{battleNav: "list"}}, "", listUrl);
+                  app.history.pushState({{battleNav: "detail"}}, "", detailUrl);
+                  try {{
+                    if (window.top && window.top !== app) {{
+                      window.top.history.replaceState({{battleNav: "detail"}}, "", window.top.location.pathname + shellQ);
+                    }}
+                  }} catch (e) {{}}
+                }}
+              }} catch (e) {{}}
+            }} else {{
+              try {{
                 var rm = [];
-                for (var i = 0; i < app.sessionStorage.length; i++) {
+                for (var i = 0; i < app.sessionStorage.length; i++) {{
                   var k = app.sessionStorage.key(i);
                   if (k && k.indexOf("battleNavStacked:") === 0) rm.push(k);
-                }
-                rm.forEach(function (k) { app.sessionStorage.removeItem(k); });
-              } catch (e) {}
-            }
-          }
-        } catch (e) {}
+                }}
+                rm.forEach(function (k) {{ app.sessionStorage.removeItem(k); }});
+              }} catch (e) {{}}
+            }}
+          }}
+        }} catch (e) {{}}
         """
     )
 
