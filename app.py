@@ -693,7 +693,7 @@ def _push_history(href: str) -> None:
           if (!app.__battlePopBound) {{
             app.__battlePopBound = true;
             app.addEventListener("popstate", function () {{
-              try {{ app.location.replace(app.location.href); }} catch (e) {{}}
+              try {{ app.location.reload(); }} catch (e) {{}}
             }});
           }}
         }} catch (e) {{}}
@@ -722,7 +722,7 @@ def _stack_detail_history(*, list_href: str, detail_href: str) -> None:
           if (!app.__battlePopBound) {{
             app.__battlePopBound = true;
             app.addEventListener("popstate", function () {{
-              try {{ app.location.replace(app.location.href); }} catch (e) {{}}
+              try {{ app.location.reload(); }} catch (e) {{}}
             }});
           }}
           var listUrl = app.location.pathname + "{list_href}";
@@ -866,7 +866,7 @@ def _apply_browser_nav() -> None:
           if (app && !app.__battlePopBound) {
             app.__battlePopBound = true;
             app.addEventListener("popstate", function () {
-              try { app.location.replace(app.location.href); } catch (e) {}
+              try { app.location.reload(); } catch (e) {}
             });
           }
         } catch (e) {}
