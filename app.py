@@ -711,7 +711,7 @@ def _push_history(href: str) -> None:
 
 
 def _stack_detail_history(*, list_href: str, detail_href: str) -> None:
-    """목록→상세를 앱 iframe history에 한 번만 쌓는다. (Streamlit이 나중에 replace해도 목록 칸은 남음)"""
+    """목록→상세 스택. 타이머는 앱 창에 두어 Streamlit 컴포넌트 제거에도 살아남게 한다."""
     if not list_href.startswith("?"):
         list_href = "?" + list_href
     if not detail_href.startswith("?"):
@@ -734,25 +734,42 @@ def _stack_detail_history(*, list_href: str, detail_href: str) -> None:
               try {{ app.location.reload(); }} catch (e) {{}}
             }});
           }}
-          var listUrl = app.location.pathname + "{list_href}";
-          var detailUrl = app.location.pathname + "{detail_href}";
-          var key = "battleNavStacked:{detail_href}";
-          var build = function () {{
-            try {{
-              if (app.sessionStorage.getItem(key) === "1") return;
-              app.sessionStorage.setItem(key, "1");
-              app.history.replaceState({{battleNav: "list"}}, "", listUrl);
-              app.history.pushState({{battleNav: "detail"}}, "", detailUrl);
-              try {{
-                if (window.top && window.top !== app) {{
-                  window.top.history.replaceState({{battleNav: "detail"}}, "", window.top.location.pathname + "{detail_href}");
-                }}
-              }} catch (e) {{}}
-            }} catch (e) {{}}
+          app.__battlePendingStack = {{
+            listUrl: app.location.pathname + "{list_href}",
+            detailUrl: app.location.pathname + "{detail_href}",
+            key: "battleNavStacked:{detail_href}",
+            shellDetail: "{detail_href}",
+            tries: 0
           }};
-          setTimeout(build, 80);
-          setTimeout(build, 400);
-          setTimeout(build, 1200);
+          if (!app.__battleStackWorker) {{
+            app.__battleStackWorker = setInterval(function () {{
+              var p = app.__battlePendingStack;
+              if (!p) return;
+              p.tries = (p.tries || 0) + 1;
+              try {{
+                if (app.sessionStorage.getItem(p.key) === "1") {{
+                  app.__battlePendingStack = null;
+                  return;
+                }}
+                var s = app.location.search || "";
+                if (s.indexOf("case=") < 0 && s.indexOf("law=") < 0) {{
+                  if (p.tries > 25) app.__battlePendingStack = null;
+                  return;
+                }}
+                app.sessionStorage.setItem(p.key, "1");
+                app.history.replaceState({{battleNav: "list"}}, "", p.listUrl);
+                app.history.pushState({{battleNav: "detail"}}, "", p.detailUrl);
+                try {{
+                  if (window.top && window.top !== app) {{
+                    window.top.history.replaceState({{battleNav: "detail"}}, "", window.top.location.pathname + p.shellDetail);
+                  }}
+                }} catch (e) {{}}
+                app.__battlePendingStack = null;
+              }} catch (e) {{
+                if (p.tries > 25) app.__battlePendingStack = null;
+              }}
+            }}, 200);
+          }}
         }} catch (e) {{}}
         """
     )
