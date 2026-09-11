@@ -5,6 +5,7 @@ import random
 import time
 import uuid
 from datetime import datetime
+from urllib.parse import urlencode
 
 import streamlit as st
 
@@ -608,139 +609,94 @@ def _gate_js(script: str) -> None:
     )
 
 
-# 브라우저 뒤로가기용. hub↔판례·개정·입장만 허용. 시합(lobby/play)은 잠금.
+# hub↔판례·개정·입장은 URL view= 로 이동(브라우저 뒤로가기 동작).
+# lobby/play 시합 중에는 session phase를 유지하고 URL만 되돌린다.
 VIEW_FREE = frozenset({"hub", "cases", "laws", "enter", "host_setup"})
 VIEW_LOCK = frozenset({"lobby", "play"})
 
 
-def _nav_bootstrap_js() -> None:
-    """popstate: 시합 중이면 잠금, 아니면 URL 반영을 위해 새로고침."""
-    _gate_js(
-        """
-        var w = window.parent;
-        try { if (window.top && window.top.location && window.top.location.href) w = window.top; } catch (e) {}
-        if (w.__battleNavBoot) return;
-        w.__battleNavBoot = true;
-        w.__battleLockOn = false;
-        w.__battleLockView = "play";
-        w.addEventListener("popstate", function () {
-          if (w.__battleLockOn) {
-            try {
-              var u = new URL(w.location.href);
-              u.searchParams.set("view", w.__battleLockView || "play");
-              w.history.pushState({battleLock: 1}, "", u.toString());
-            } catch (e) {}
-            return;
-          }
-          try { w.location.replace(w.location.href); } catch (e) {}
-        });
-        """
-    )
+def _qp_one(name: str) -> str:
+    raw = st.query_params.get(name)
+    if raw is None:
+        return ""
+    if isinstance(raw, (list, tuple)):
+        return str(raw[0] or "").strip()
+    return str(raw or "").strip()
 
 
-def _flush_history_push() -> None:
-    """버튼→_goto→rerun 때 JS가 유실되므로, 다음 화면에서 히스토리를 심는다."""
-    hist = st.session_state.pop("_hist_pair", None)
-    if not hist:
-        return
-    fr, to = hist
-    fr = (fr or "hub").strip()
-    to = (to or "").strip()
-    if not to or fr == to or to not in VIEW_FREE:
-        return
-    if fr not in VIEW_FREE:
-        fr = "hub"
-    _gate_js(
-        f"""
-        var w = window.parent;
-        try {{ if (window.top && window.top.location && window.top.location.href) w = window.top; }} catch (e) {{}}
-        try {{
-          var toU = new URL(w.location.href);
-          toU.searchParams.set("view", "{to}");
-          var frU = new URL(w.location.href);
-          frU.searchParams.set("view", "{fr}");
-          w.history.replaceState({{battleView: "{fr}"}}, "", frU.toString());
-          w.history.pushState({{battleView: "{to}"}}, "", toU.toString());
-          w.__battleLockOn = false;
-        }} catch (e) {{}}
-        """
-    )
+def _app_href(view: str, *, keep_room: bool = False, **extra: str) -> str:
+    """실제 <a> 이동용 URL. replaceState가 아니라 브라우저 히스토리가 쌓인다."""
+    q: dict[str, str] = {"view": view}
+    inn = _qp_one("in")
+    if inn:
+        q["in"] = inn
+    if keep_room:
+        room = _qp_one("room") or str(st.session_state.get("code") or "").strip()
+        if room:
+            q["room"] = room
+    for k, v in extra.items():
+        if v is not None and str(v) != "":
+            q[k] = str(v)
+    return "?" + urlencode(q)
 
 
 def _goto(phase: str) -> None:
-    """화면 전환. 히스토리는 다음 렌더의 _flush_history_push에서 넣는다."""
-    cur = str(st.query_params.get("view") or st.session_state.get("phase") or "hub").strip()
+    """세션 화면 전환(+ view 동기화). 자유 화면은 가능하면 link로 이동하는 편이 뒤로가기에 유리하다."""
     st.session_state.phase = phase
     if phase == "gate":
         return
     st.query_params["view"] = phase
-    if phase in VIEW_FREE:
-        st.session_state._hist_pair = (cur if cur in VIEW_FREE else "hub", phase)
-    else:
-        st.session_state.pop("_hist_pair", None)
-
-
-def _lock_browser_back(on: bool) -> None:
-    """시합 중 뒤로가기 잠금 플래그."""
-    st.session_state._back_locked = on
-    phase = st.session_state.get("phase") or "play"
-    if on:
-        _gate_js(
-            f"""
-            var w = window.parent;
-            try {{ if (window.top && window.top.location && window.top.location.href) w = window.top; }} catch (e) {{}}
-            w.__battleLockOn = true;
-            w.__battleLockView = "{phase}";
-            """
-        )
-    else:
-        _gate_js(
-            """
-            var w = window.parent;
-            try { if (window.top && window.top.location && window.top.location.href) w = window.top; } catch (e) {}
-            w.__battleLockOn = false;
-            """
-        )
 
 
 def _apply_browser_nav() -> None:
-    """URL ?view= 기준 화면 동기화 + 히스토리/잠금."""
-    _nav_bootstrap_js()
-    _flush_history_push()
+    """URL ?view= 가 자유 화면의 기준. 시합 중에는 뒤로가기로 나가도 시합에 머문다."""
+    # 예전 잠금 스크립트가 탭에 남아 있으면 무조건 해제
+    _gate_js(
+        """
+        var w = window.parent;
+        try { if (window.top && window.top.location) w = window.top; } catch (e) {}
+        w.__battleLockOn = false;
+        w.__battleNavBoot = false;
+        """
+    )
+
+    kind = _qp_one("kind")
+    if kind in ("exam", "ox"):
+        st.session_state.quiz_kind = kind
 
     phase = st.session_state.get("phase") or "hub"
-    if phase == "gate":
-        return
-    view = str(st.query_params.get("view") or "").strip()
+    view = _qp_one("view")
 
     if phase in VIEW_LOCK:
+        code = str(st.session_state.get("code") or "").strip()
         if view != phase:
             st.query_params["view"] = phase
-        _lock_browser_back(True)
+        if code and _qp_one("room") != code:
+            st.query_params["room"] = code
         return
 
-    _lock_browser_back(False)
-
+    # URL에 view가 있으면 그게 화면 (브라우저 뒤로가기 포함)
     if view in VIEW_FREE:
-        if view != phase:
-            st.session_state.phase = view
-            if view == "hub":
-                st.session_state.pop("code", None)
-                _clear_param("room")
+        st.session_state.phase = view
+        if view == "hub":
+            st.session_state.pop("code", None)
+            _clear_param("room")
         return
 
-    if phase in VIEW_FREE and phase != "hub":
-        st.session_state.phase = "hub"
-        st.session_state.pop("code", None)
-        _clear_param("room")
+    # view 없음 + 방 번호 링크 → 입장
+    if _qp_one("room"):
+        st.session_state.phase = "enter"
+        st.query_params["view"] = "enter"
         return
 
-    if phase == "hub" and not view:
-        st.query_params["view"] = "hub"
+    # view 없음 → 홈 (뒤로가기로 파라미터가 빠진 경우 포함)
+    st.session_state.phase = "hub"
+    st.session_state.pop("code", None)
+    _clear_param("room")
+    st.query_params["view"] = "hub"
 
 
 def _do_leave_to_enter() -> None:
-    _lock_browser_back(False)
     st.session_state.pop("code", None)
     _drop_room()
     _goto("enter")
@@ -951,10 +907,7 @@ if not st.session_state.unlocked:
 # 쓰는 동안 만료를 밀어 새로고침·연속 사용 시 끊기지 않게 한다.
 _mark_gate()
 
-if st.session_state.phase == "hub" and st.query_params.get("room"):
-    _goto("enter")
-
-# 브라우저 뒤로가기 ↔ 화면 동기화 (시합 중에는 잠금)
+# URL view= / 브라우저 뒤로가기 동기화
 _apply_browser_nav()
 
 choices = area_choices()
@@ -1314,17 +1267,21 @@ def hub_screen() -> None:
     with r1a:
         with st.container(border=True):
             _svc_card(EXAM_TITLE, EXAM_DESC, "01")
-            if st.button("시작하기", type="primary", key="hub_exam", use_container_width=True):
-                st.session_state.quiz_kind = "exam"
-                _goto("enter")
-                st.rerun()
+            st.link_button(
+                "시작하기",
+                _app_href("enter", kind="exam"),
+                type="primary",
+                use_container_width=True,
+            )
     with r1b:
         with st.container(border=True):
             _svc_card("실무역량평가 OX", OX_DESC, "02")
-            if st.button("시작하기", type="primary", key="hub_ox", use_container_width=True):
-                st.session_state.quiz_kind = "ox"
-                _goto("enter")
-                st.rerun()
+            st.link_button(
+                "시작하기",
+                _app_href("enter", kind="ox"),
+                type="primary",
+                use_container_width=True,
+            )
     _sect("학습하기", "개인 학습·모의고사로 바로 이어집니다.")
     r_learn_a, r_learn_b = st.columns(2, gap="medium")
     with r_learn_a:
@@ -1357,9 +1314,12 @@ def hub_screen() -> None:
                 "음주운전·폭행·가정폭력 등 현장 쟁점으로 법제처 공식 판례만 제공",
                 "05",
             )
-            if st.button("최신판례 열기", type="primary", key="hub_case", use_container_width=True):
-                _goto("cases")
-                st.rerun()
+            st.link_button(
+                "최신판례 열기",
+                _app_href("cases"),
+                type="primary",
+                use_container_width=True,
+            )
     with r2b:
         with st.container(border=True):
             _svc_card(
@@ -1367,9 +1327,12 @@ def hub_screen() -> None:
                 "경찰청 소관 법령의 공포·시행·제개정만 제공",
                 "06",
             )
-            if st.button("법률개정 열기", type="primary", key="hub_law", use_container_width=True):
-                _goto("laws")
-                st.rerun()
+            st.link_button(
+                "법률개정 열기",
+                _app_href("laws"),
+                type="primary",
+                use_container_width=True,
+            )
     st.caption("최신판례·법률개정은 법제처 원문 그대로 공식 자료만 제공")
     _sect("랭킹", "누적과 단일(한 판 최고)을 나눠 봅니다. 종목·방식별로 10위까지 공개합니다.")
     rank_scope = st.radio(
@@ -1425,10 +1388,7 @@ def hub_screen() -> None:
 
 
 def cases_screen() -> None:
-    if st.button("← 홈으로", key="cases_back_hub", use_container_width=True):
-        _goto("hub")
-        st.rerun()
-        return
+    st.link_button("← 홈으로", _app_href("hub"), use_container_width=True)
     st.caption("출처: 법제처 국가법령정보 공동활용. 직무·교통·형사·보호 쟁점으로 대법원 공식 판례만 가져옵니다.")
     labels = [t[0] for t in precedent.FIELD_TOPICS]
     pick = st.selectbox("쟁점", labels, key="case_topic")
@@ -1497,10 +1457,7 @@ def cases_screen() -> None:
 
 
 def laws_screen() -> None:
-    if st.button("← 홈으로", key="laws_back_hub", use_container_width=True):
-        _goto("hub")
-        st.rerun()
-        return
+    st.link_button("← 홈으로", _app_href("hub"), use_container_width=True)
     st.caption("출처: 법제처. 소관부처 코드 경찰청(1320000)만 조회합니다. 개정 이유는 공식 제개정이유만 보여 줍니다.")
     hide_org = st.checkbox("직제는 빼기", value=True, key="law_hide_org")
     oc = _law_oc()
@@ -1580,10 +1537,7 @@ def _cached_amend(oc: str, mst: str) -> dict[str, str]:
 
 
 def enter_screen() -> None:
-    if st.button("← 홈으로", key="enter_back_hub", use_container_width=True):
-        _goto("hub")
-        st.rerun()
-        return
+    st.link_button("← 홈으로", _app_href("hub"), use_container_width=True)
     kind = "실무역량평가 OX" if st.session_state.get("quiz_kind") == "ox" else EXAM_TITLE
     _sect(kind, "시도청·경찰서·지구대·파출소·팀을 고른 뒤, 방을 열거나 방 번호로 들어옵니다.")
     org = pick_org()
@@ -1704,9 +1658,7 @@ def host_setup_screen() -> None:
         st.caption(glue_kr("설명이 맞으면 O, 틀리면 X입니다. 몇 개인지 묻는 문제는 숫자를 넣습니다."))
 
     open_room = st.button("이 설정으로 방 열기", type="primary", use_container_width=True)
-    if st.button("뒤로", key="setup_back", use_container_width=True):
-        _goto("enter")
-        st.rerun()
+    st.link_button("뒤로", _app_href("enter", kind=st.session_state.get("quiz_kind") or "exam"), use_container_width=True)
     if open_room:
         seed = random.randint(1, 10_000_000)
         deck, stored_id, shown = _build_deck(area_id, count, seed, kind)
