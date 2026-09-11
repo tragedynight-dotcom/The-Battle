@@ -485,7 +485,8 @@ def _finish_side(room: dict, side: str) -> None:
 
 
 def _deal_side(room: dict, side: str) -> None:
-    """한 팀이 덱을 끝까지 푼다. 팀 안에서는 들어온 순서대로 한 명씩."""
+    """한 팀이 덱을 끝까지 푼다. 팀 안에서는 들어온 순서대로 한 명씩.
+    q_at은 푸는 사람 화면에 문제가 뜬 뒤 arm_turn으로 켠다(방장만 빨리 시작되는 것 방지)."""
     if side not in SIDES:
         return
     deck = room.get("deck") or []
@@ -500,13 +501,12 @@ def _deal_side(room: dict, side: str) -> None:
     if not pid:
         _finish_side(room, side)
         return
-    now = datetime.now().isoformat()
     lane["pid"] = pid
-    lane["q_at"] = now
+    lane["q_at"] = None
     p = room["players"][pid]
     p["idx"] = idx
     p["q_idx"] = idx
-    p["q_at"] = now
+    p["q_at"] = None
 
 
 def _deal_all_sides(room: dict) -> None:
@@ -515,6 +515,30 @@ def _deal_all_sides(room: dict) -> None:
         lane = _lane(room, s)
         if not lane.get("done") and not lane.get("pid"):
             _deal_side(room, s)
+
+
+def arm_turn(code: str, side: str, pid: str) -> dict | None:
+    """지금 차례인 사람 화면에 문제가 뜬 순간부터 제한시간을 센다."""
+
+    def inner():
+        room = _read(code)
+        if room is None or not relay_on(room) or room.get("status") != "play":
+            return room
+        if side not in SIDES or pid not in room["players"]:
+            return room
+        lane = _lane(room, side)
+        if lane.get("done") or lane.get("pid") != pid:
+            return room
+        if lane.get("q_at"):
+            return room
+        now = datetime.now().isoformat()
+        lane["q_at"] = now
+        room["players"][pid]["q_at"] = now
+        room["players"][pid]["q_idx"] = int(lane.get("idx") or 0)
+        _write(room)
+        return room
+
+    return _with_lock(code, inner)
 
 
 def begin_if_due(code: str) -> dict | None:
@@ -527,6 +551,10 @@ def begin_if_due(code: str) -> dict | None:
             if relay_on(room):
                 room["relay"] = room.get("relay") or _empty_relay()
                 _deal_all_sides(room)
+            else:
+                for p in room["players"].values():
+                    p["q_at"] = None
+                    p["q_idx"] = -1
             _write(room)
         return room
 
@@ -668,7 +696,14 @@ def answer(code: str, pid: str, choice: int, answer: int, ms: int = 0, double: b
             if relay_on(room):
                 room["relay"] = room.get("relay") or _empty_relay()
                 _deal_all_sides(room)
+            else:
+                for x in room["players"].values():
+                    x["q_at"] = None
+                    x["q_idx"] = -1
         if room.get("status") != "play":
+            return room
+        # 카운트다운이 끝나기 전·시계 왜곡 시 선답 방지
+        if room.get("play_at") and seconds_left(room) > 0:
             return room
         p = room["players"][pid]
         if p.get("done") or p.get("out"):
@@ -682,6 +717,10 @@ def answer(code: str, pid: str, choice: int, answer: int, ms: int = 0, double: b
             lane = _lane(room, side)
             if lane.get("done") or lane.get("pid") != pid:
                 return room
+            if not lane.get("q_at"):
+                now = datetime.now().isoformat()
+                lane["q_at"] = now
+                p["q_at"] = now
             idx = int(lane.get("idx") or 0)
             if idx < 0 or idx >= len(deck):
                 return room

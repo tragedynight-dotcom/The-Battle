@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import math
 import random
 import time
 import uuid
@@ -232,12 +233,15 @@ st.markdown(
         font-size:clamp(.88rem, 3.6vw, .95rem) !important;}
       div.stLinkButton > a {white-space:normal !important;}
       .fx-spark {display:none;}
-      .fx-ring {display:none;}
+      .fx-ring {border-width:2px;}
       .fx-pop b {font-size:1.55rem !important;}
       .fx-pop.hot b, .fx-pop.big b {font-size:1.75rem !important;}
       .fx-pop span {font-size:.9rem !important;}
       .fx-flash {animation-duration:.65s;}
-      .fx-pop {animation-duration:.85s; top:22%;}
+      .fx-pop {animation-duration:.9s; top:22%;}
+      .fx-burst i {width:7px; height:7px;}
+      .result-banner {padding:16px 14px; margin:0 0 12px 0;}
+      .result-banner b {font-size:1.55rem;}
     }
     header[data-testid="stHeader"], [data-testid="stToolbar"], [data-testid="stDecoration"],
     .stAppDeployButton, #MainMenu, footer {display:none !important;}
@@ -574,30 +578,55 @@ st.markdown(
       rgba(232,208,145,.34), transparent 58%); animation:fxFlash 1.05s ease-out forwards;}
     .fx-flash.miss {background:radial-gradient(ellipse at 50% 32%,
       rgba(192,57,43,.16), transparent 58%);}
+    .fx-flash.hot {background:radial-gradient(ellipse at 50% 28%,
+      rgba(255,196,72,.42), rgba(226,85,61,.12) 42%, transparent 62%);}
+    .fx-flash.big {background:radial-gradient(ellipse at 50% 26%,
+      rgba(255,230,140,.5), rgba(226,85,61,.18) 40%, transparent 65%);}
     .fx-pop {position:absolute; left:50%; top:26%; transform:translate(-50%,-50%);
-      text-align:center; animation:fxPop 1.2s ease-out forwards;}
+      text-align:center; animation:fxPop 1.25s ease-out forwards;}
     .fx-pop b {display:block; font-size:2.35rem; font-weight:800; color:#fff;
       letter-spacing:-.03em; text-shadow:0 6px 22px rgba(11,31,58,.38);}
-    .fx-pop.hot b {font-size:2.75rem; color:#ffe7a3;}
-    .fx-pop.big b {font-size:3.1rem; color:#fff3c4;}
+    .fx-pop.hot b {font-size:2.75rem; color:#ffe7a3; animation:fxShake .45s ease-out;}
+    .fx-pop.big b {font-size:3.1rem; color:#fff3c4; animation:fxShake .55s ease-out;}
     .fx-pop span {display:block; margin-top:5px; color:#f2e2b8; font-weight:680; font-size:1.02rem;}
     .fx-pop.miss b {color:#f3d0cc; font-size:1.7rem;}
     .fx-ring {position:absolute; left:50%; top:26%; width:28px; height:28px; border-radius:50%;
       border:3px solid rgba(201,162,39,.9); transform:translate(-50%,-50%);
       animation:fxRing 1s ease-out forwards;}
     .fx-ring.r2 {animation-delay:.08s; border-color:rgba(255,255,255,.45);}
+    .fx-ring.r3 {animation-delay:.16s; border-color:rgba(255,196,72,.55);}
     .fx-spark {position:absolute; left:50%; top:26%; width:8px; height:8px; margin:-4px 0 0 -4px;
       border-radius:50%; background:#e8d091; box-shadow:0 0 8px rgba(232,208,145,.8);
       animation:fxSpark .95s ease-out forwards;}
+    .fx-burst {position:absolute; left:50%; top:26%; width:0; height:0;}
+    .fx-burst i {position:absolute; left:0; top:0; width:9px; height:9px; margin:-4px;
+      border-radius:50%; background:#ffd978; box-shadow:0 0 10px rgba(255,200,80,.85);
+      animation:fxBurst .9s ease-out forwards;}
+    .fx-burst i:nth-child(odd) {background:#fff; width:6px; height:6px;}
+    .fx-burst i:nth-child(3n) {background:#e2553d;}
     @keyframes fxFlash {0%{opacity:.95;} 100%{opacity:0;}}
     @keyframes fxPop {0%{opacity:0; transform:translate(-50%,-38%) scale(.62);}
       16%{opacity:1; transform:translate(-50%,-50%) scale(1.08);}
       68%{opacity:1;} 100%{opacity:0; transform:translate(-50%,-62%) scale(1);}}
-    @keyframes fxRing {0%{opacity:.95; width:22px; height:22px;} 100%{opacity:0; width:240px; height:240px;}}
+    @keyframes fxRing {0%{opacity:.95; width:22px; height:22px;} 100%{opacity:0; width:260px; height:260px;}}
     @keyframes fxSpark {0%{opacity:1; transform:translate(0,0) scale(1);}
       100%{opacity:0; transform:translate(var(--dx), var(--dy)) scale(.15);}}
+    @keyframes fxBurst {0%{opacity:1; transform:rotate(var(--rot)) translate(0,0) scale(1);}
+      100%{opacity:0; transform:rotate(var(--rot)) translate(var(--dx), var(--dy)) scale(.2);}}
+    @keyframes fxShake {0%{transform:translateX(0);} 20%{transform:translateX(-4px) rotate(-1deg);}
+      40%{transform:translateX(4px) rotate(1deg);} 60%{transform:translateX(-3px);} 100%{transform:translateX(0);}}
     .hud .chip.hot {animation:hotPulse .55s ease;}
     @keyframes hotPulse {0%{transform:scale(1);} 40%{transform:scale(1.14);} 100%{transform:scale(1);}}
+    .result-banner {border-radius:16px; padding:18px 16px; margin:0 0 14px 0; text-align:center;
+      border:1px solid var(--line); box-shadow:var(--sh);}
+    .result-banner.win {background:linear-gradient(180deg,#eef9f1,#fff); border-color:#b7e0c4;}
+    .result-banner.lose {background:linear-gradient(180deg,#fbf0ef,#fff); border-color:#e5c4c0;}
+    .result-banner.draw {background:linear-gradient(180deg,#f4f6f9,#fff); border-color:#d5deea;}
+    .result-banner b {display:block; font-size:1.85rem; font-weight:800; letter-spacing:-.03em; color:var(--ink);}
+    .result-banner.win b {color:#1f7a45;}
+    .result-banner.lose b {color:#a33b32;}
+    .result-banner.draw b {color:#3b4658;}
+    .result-banner span {display:block; margin-top:6px; color:var(--muted); font-weight:600; font-size:.95rem;}
     /* Streamlit 기본 말줄임(…) 차단 */
     button p, button span, a[data-testid="stBaseLinkButton"] p {
       text-overflow:clip !important;}
@@ -2291,7 +2320,7 @@ def lobby_screen() -> None:
                 rooms.auto_sides(code, pid)
                 st.rerun()
 
-    @st.fragment(run_every=2)
+    @st.fragment(run_every=1)
     def wait_peers():
         live = rooms.load(code)
         if live is None:
@@ -2422,6 +2451,20 @@ def _react_answer(code: str, pid: str) -> None:
     _cheer(ok, int(me.get("streak") or 0))
 
 
+def _burst_bits(n: int) -> str:
+    """콤보 폭죽. CSS만으로 그린다(이미지·상용 이펙트 없음)."""
+    count = 8 if n < 3 else (12 if n < 5 else (16 if n < 8 else 22))
+    bits = []
+    for i in range(count):
+        ang = (360 / count) * i
+        dist = 70 + (i % 5) * 18
+        rad = math.radians(ang)
+        dx = int(dist * math.cos(rad))
+        dy = int(dist * math.sin(rad))
+        bits.append(f"<i style='--dx:{dx}px;--dy:{dy}px;--rot:{ang}deg'></i>")
+    return "<span class='fx-burst'>" + "".join(bits) + "</span>"
+
+
 def _show_fx() -> None:
     fx = st.session_state.pop("_pending_fx", None)
     pending = st.session_state.pop("_pending_sfx", None)
@@ -2436,38 +2479,101 @@ def _show_fx() -> None:
     n = int(fx.get("streak") or 0)
     if ok:
         cls = "fx-pop"
+        flash_cls = "fx-flash"
         if n >= 5:
             cls += " hot big"
+            flash_cls += " big"
         elif n >= 2:
             cls += " hot"
-        title = f"{n}연속" if n >= 2 else "맞힘"
-        note = "연속으로 맞혔습니다" if n >= 2 else "정답입니다"
-        # 폰에서는 CSS로 spark/ring을 끄므로 가볍게만 넣는다
+            flash_cls += " hot"
+        title = f"{n}연속!" if n >= 2 else "맞힘"
+        if n >= 8:
+            note = "대폭발 콤보"
+        elif n >= 5:
+            note = "콤보가 터졌습니다"
+        elif n >= 3:
+            note = "연속 정답"
+        elif n >= 2:
+            note = "콤보 시작"
+        else:
+            note = "정답입니다"
         sparks = "".join(
             f"<i class='fx-spark' style='--dx:{dx}px;--dy:{dy}px'></i>"
-            for dx, dy in ((-70, -35), (75, -45), (0, -70))
+            for dx, dy in ((-70, -35), (75, -45), (0, -70), (-55, 50), (60, 55))
         )
-        rings = "<i class='fx-ring'></i>" if n >= 3 else ""
-        flash = "<div class='fx-flash'></div>"
+        rings = "<i class='fx-ring'></i>"
+        if n >= 3:
+            rings += "<i class='fx-ring r2'></i>"
+        if n >= 5:
+            rings += "<i class='fx-ring r3'></i>"
+        burst = _burst_bits(n) if n >= 2 else ""
+        flash = f"<div class='{flash_cls}'></div>"
     else:
         cls = "fx-pop miss"
         title = "아쉽"
         note = "다음 문항에서 다시"
         sparks = ""
         rings = ""
+        burst = ""
         flash = "<div class='fx-flash miss'></div>"
     st.markdown(
-        f"<div class='fx-layer'>{flash}{rings}{sparks}"
+        f"<div class='fx-layer'>{flash}{rings}{sparks}{burst}"
         f"<div class='{cls}'><b>{html.escape(title)}</b><span>{html.escape(note)}</span></div></div>",
         unsafe_allow_html=True,
     )
+
+
+def _match_outcome(room: dict, pid: str) -> tuple[str, str, str]:
+    """(등급 win|lose|draw, 큰제목, 설명)."""
+    me = (room.get("players") or {}).get(pid) or {}
+    mode = rooms.mode_of(room)
+    if room.get("team_battle"):
+        side = me.get("side") or ""
+        rows = rooms.team_ranking(room)
+        if len(rows) < 2 or side not in rooms.SIDES:
+            return "draw", "경기 종료", "팀 결과를 집계했습니다."
+        key = "points" if mode == "speed" else "score"
+        a, b = rows[0], rows[1]
+        if a[key] == b[key] and a.get("ms") == b.get("ms"):
+            return "draw", "무승부", f"{a['side']} · {b['side']} 동점입니다."
+        if a["side"] == side:
+            unit = "점" if mode == "speed" else "개"
+            return "win", "승리", f"{side}이(가) {a[key]}{unit}로 이겼습니다."
+        unit = "점" if mode == "speed" else "개"
+        return "lose", "패배", f"{a['side']}이(가) {a[key]}{unit}로 앞섰습니다."
+    order = rooms.ranking(room)
+    if not order:
+        return "draw", "경기 종료", "결과가 없습니다."
+    pos = next((i for i, r in enumerate(order, 1) if r["pid"] == pid), len(order))
+    n = len(order)
+    if mode == "survival" and me.get("out"):
+        return "lose", "탈락", f"{int(me.get('score') or 0)}문제까지 살아남았습니다."
+    if pos == 1:
+        return "win", "승리 · 1등", f"{n}명 중 1등입니다."
+    if pos == 2 and n >= 2:
+        return "draw", "2등", f"{n}명 중 2등입니다."
+    return "lose", f"{pos}등", f"{n}명 중 {pos}등입니다."
 
 
 def done_screen(room: dict, pid: str, deck: list[dict], total: int) -> None:
     code = room["code"]
     me = room["players"][pid]
     mode = rooms.mode_of(room)
-    sfx.play("done", f"{code}-{room.get('round') or 1}-done-{pid}")
+    all_done = all(p.get("done") for p in room["players"].values()) or room.get("status") == "done"
+    grade, title, note = _match_outcome(room, pid)
+    if all_done:
+        tok = f"{code}-{room.get('round') or 1}-out-{pid}-{grade}"
+        try:
+            sfx.play({"win": "win", "lose": "lose", "draw": "draw"}.get(grade, "done"), tok)
+        except Exception:
+            pass
+        st.markdown(
+            f"<div class='result-banner {grade}'><b>{html.escape(title)}</b>"
+            f"<span>{html.escape(note)}</span></div>",
+            unsafe_allow_html=True,
+        )
+    else:
+        sfx.play("done", f"{code}-{room.get('round') or 1}-done-{pid}")
     if mode == "survival" and me.get("out"):
         st.error(f"탈락. {int(me.get('score') or 0)}문제까지 살아남았습니다.")
     else:
@@ -2481,17 +2587,24 @@ def done_screen(room: dict, pid: str, deck: list[dict], total: int) -> None:
         live = rooms.load(code)
         if live is None:
             return
-        all_done = all(p.get("done") for p in live["players"].values())
-        show_ranking(live, pid, "최종 순위" if all_done else "실시간 순위")
-        if all_done:
+        finished = all(p.get("done") for p in live["players"].values()) or live.get("status") == "done"
+        if finished:
+            g, t, n = _match_outcome(live, pid)
+            st.markdown(
+                f"<div class='result-banner {g}'><b>{html.escape(t)}</b>"
+                f"<span>{html.escape(n)}</span></div>",
+                unsafe_allow_html=True,
+            )
+        show_ranking(live, pid, "최종 순위" if finished else "실시간 순위")
+        if finished:
             me_live = (live.get("players") or {}).get(pid) or {}
             viewer = ((me_live.get("name") or ""), path_text(rooms.player_org(live, pid, me_live)))
             kind = live.get("kind") or "exam"
-            mode = rooms.mode_of(live)
-            show_standings_board(kind, mode, viewer=viewer, title="누적 랭킹", scope="cumul")
-            show_standings_board(kind, mode, viewer=viewer, title="단일 최고 랭킹", scope="single")
-        if not all_done:
-            st.caption("아직 푸는 사람이 있습니다.")
+            mode_live = rooms.mode_of(live)
+            show_standings_board(kind, mode_live, viewer=viewer, title="누적 랭킹", scope="cumul")
+            show_standings_board(kind, mode_live, viewer=viewer, title="단일 최고 랭킹", scope="single")
+        if not finished:
+            st.caption("아직 푸는 사람이 있습니다. 모두 끝나면 승패가 확정됩니다.")
 
     live_rank()
     show_review(me.get("history"), deck)
@@ -2592,6 +2705,11 @@ def play_relay(room: dict, pid: str, deck: list[dict], total: int) -> None:
         return
     double = bool(deck[idx].get("x2"))
     batter = lane.get("pid") or ""
+    if pid == batter and not lane.get("q_at"):
+        rooms.arm_turn(code, side, pid)
+        room = rooms.load(code) or room
+        lane = rooms.lane_of(room, side)
+        me = (room.get("players") or {}).get(pid) or {}
     order = rooms.ranking(room)
     pos = next((i for i, r in enumerate(order, 1) if r["pid"] == pid), len(order))
     left = None

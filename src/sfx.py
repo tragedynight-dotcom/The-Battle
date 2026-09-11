@@ -92,6 +92,31 @@ def _countdown_samples() -> list[int]:
     return samples
 
 
+def _noise_pop(ms: int = 40, vol: float = 0.22) -> list[int]:
+    """짧은 화이트노이즈 팝. 상용 샘플이 아니라 난수로 만든다."""
+    n = max(1, int(RATE * ms / 1000))
+    fade = max(1, int(RATE * 0.004))
+    frames: list[int] = []
+    seed = 1234567
+    for i in range(n):
+        seed = (1103515245 * seed + 12345) & 0x7FFFFFFF
+        raw = (seed / 0x7FFFFFFF) * 2 - 1
+        env = 1.0
+        if i < fade:
+            env = i / fade
+        elif i > n - fade:
+            env = (n - i) / fade
+        frames.append(int(max(-1, min(1, vol * env * raw)) * 32767))
+    return frames
+
+
+def _fanfare(notes: list[tuple[float, int]], vol: float = 0.4) -> bytes:
+    """콤보·승리용. 노이즈 팝 + 배음 종소리."""
+    frames = _noise_pop(36, 0.18)
+    frames.extend(_chime_samples(notes, vol))
+    return _wav(frames)
+
+
 @st.cache_data
 def _clip(kind: str) -> bytes:
     if kind == "tick":
@@ -101,20 +126,41 @@ def _clip(kind: str) -> bytes:
     if kind in ("submit", "ok"):
         return _chime([(659, 70), (880, 130)], 0.38)
     if kind == "combo2":
-        return _chime([(659, 65), (784, 75), (988, 160)], 0.40)
+        return _fanfare([(698, 55), (880, 70), (1047, 150)], 0.42)
     if kind == "combo3":
-        return _chime([(523, 55), (659, 65), (784, 75), (1047, 190)], 0.42)
+        return _fanfare([(523, 45), (659, 50), (784, 55), (1047, 90), (1319, 170)], 0.44)
     if kind == "combo5":
-        return _chime([(523, 50), (659, 50), (784, 55), (988, 70), (1175, 210)], 0.44)
+        return _fanfare(
+            [(392, 40), (523, 40), (659, 45), (784, 50), (988, 55), (1175, 70), (1568, 200)],
+            0.46,
+        )
     if kind == "combo8":
-        return _chime([(392, 45), (523, 50), (659, 55), (784, 60), (988, 70), (1319, 230)], 0.46)
+        return _fanfare(
+            [
+                (330, 35),
+                (392, 35),
+                (523, 40),
+                (659, 40),
+                (784, 45),
+                (988, 50),
+                (1175, 55),
+                (1319, 60),
+                (1760, 220),
+            ],
+            0.48,
+        )
     if kind == "miss":
-        # 저음은 폰 스피커에서 거의 안 들림 → 중고음·볼륨 보강
         return _tone([(520, 120), (390, 180)], 0.42)
     if kind == "go":
         return _tone([(523, 100), (784, 180)], 0.40)
     if kind == "done":
         return _chime([(523, 100), (659, 170)], 0.38)
+    if kind == "win":
+        return _fanfare([(523, 80), (659, 80), (784, 90), (1047, 220)], 0.46)
+    if kind == "lose":
+        return _tone([(440, 160), (349, 220)], 0.36)
+    if kind == "draw":
+        return _chime([(523, 100), (523, 140)], 0.34)
     if kind == "count10":
         return _wav(_countdown_samples())
     if kind == "silent":
