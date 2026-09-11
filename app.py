@@ -681,6 +681,15 @@ def _push_history(href: str) -> None:
           }}
         }} catch (e) {{}}
         try {{
+          // 목록/홈으로 올 때 상세 스택 키 제거 → 다음 요지 열기에서 다시 쌓임
+          try {{
+            var rm = [];
+            for (var i = 0; i < app.sessionStorage.length; i++) {{
+              var k = app.sessionStorage.key(i);
+              if (k && k.indexOf("battleNavStacked:") === 0) rm.push(k);
+            }}
+            rm.forEach(function (k) {{ app.sessionStorage.removeItem(k); }});
+          }} catch (e) {{}}
           var next = app.location.pathname + "{href}";
           if ((app.location.pathname + app.location.search) !== next) {{
             app.history.pushState({{battleNav: 1}}, "", next);
@@ -702,7 +711,7 @@ def _push_history(href: str) -> None:
 
 
 def _stack_detail_history(*, list_href: str, detail_href: str) -> None:
-    """목록→상세를 앱 iframe history에 두 칸으로 쌓아 브라우저 뒤로가기가 요지를 닫게 한다."""
+    """목록→상세를 앱 iframe history에 한 번만 쌓는다. (Streamlit이 나중에 replace해도 목록 칸은 남음)"""
     if not list_href.startswith("?"):
         list_href = "?" + list_href
     if not detail_href.startswith("?"):
@@ -727,8 +736,11 @@ def _stack_detail_history(*, list_href: str, detail_href: str) -> None:
           }}
           var listUrl = app.location.pathname + "{list_href}";
           var detailUrl = app.location.pathname + "{detail_href}";
-          setTimeout(function () {{
+          var key = "battleNavStacked:{detail_href}";
+          var build = function () {{
             try {{
+              if (app.sessionStorage.getItem(key) === "1") return;
+              app.sessionStorage.setItem(key, "1");
               app.history.replaceState({{battleNav: "list"}}, "", listUrl);
               app.history.pushState({{battleNav: "detail"}}, "", detailUrl);
               try {{
@@ -737,7 +749,10 @@ def _stack_detail_history(*, list_href: str, detail_href: str) -> None:
                 }}
               }} catch (e) {{}}
             }} catch (e) {{}}
-          }}, 40);
+          }};
+          setTimeout(build, 80);
+          setTimeout(build, 400);
+          setTimeout(build, 1200);
         }} catch (e) {{}}
         """
     )
