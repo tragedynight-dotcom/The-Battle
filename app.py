@@ -690,8 +690,8 @@ def _push_history(href: str) -> None:
               window.top.history.replaceState({{battleNav: 1}}, "", window.top.location.pathname + "{href}");
             }}
           }} catch (e) {{}}
-          if (!app.__battlePopBound) {{
-            app.__battlePopBound = true;
+          if (!app.__battlePopReload) {{
+            app.__battlePopReload = true;
             app.addEventListener("popstate", function () {{
               try {{ app.location.reload(); }} catch (e) {{}}
             }});
@@ -719,8 +719,8 @@ def _stack_detail_history(*, list_href: str, detail_href: str) -> None:
           }}
         }} catch (e) {{}}
         try {{
-          if (!app.__battlePopBound) {{
-            app.__battlePopBound = true;
+          if (!app.__battlePopReload) {{
+            app.__battlePopReload = true;
             app.addEventListener("popstate", function () {{
               try {{ app.location.reload(); }} catch (e) {{}}
             }});
@@ -863,8 +863,8 @@ def _apply_browser_nav() -> None:
         } catch (e) {}
         try { app.__battleLockOn = false; app.__battleNavBoot = false; } catch (e) {}
         try {
-          if (app && !app.__battlePopBound) {
-            app.__battlePopBound = true;
+          if (app && !app.__battlePopReload) {
+            app.__battlePopReload = true;
             app.addEventListener("popstate", function () {
               try { app.location.reload(); } catch (e) {}
             });
