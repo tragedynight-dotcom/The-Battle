@@ -133,10 +133,11 @@ def room_flow(mode: str, kind: str) -> None:
 
 
 def relay_flow() -> None:
-    """홍 2명 · 청 1명. 문항마다 편이 바뀌고, 홍은 방장→박경위→방장 순으로 돈다."""
+    """홍 2명 · 청 1명. 양 팀이 동시에 같은 덱을 풀고, 홍은 방장→박경위 순으로 돈다."""
     deck, aid, name = make_quiz("rand_exam", 6, 7)
+    n = len(deck)
     org = {"agency": "광주광역시경찰청", "station": "광주동부", "unit": "학동지구대", "team": "1팀"}
-    room = rooms.create("h1", "방장", aid, name, len(deck), deck, org=org,
+    room = rooms.create("h1", "방장", aid, name, n, deck, org=org,
                         mode="classic", team_battle=True, kind="exam")
     code = room["code"]
     rooms.join(code, "p2", "이경장")
@@ -146,30 +147,37 @@ def relay_flow() -> None:
     r = rooms.load(code)
     r["status"] = "play"
     r["play_at"] = None
-    rooms._deal_turn(r)
+    rooms._deal_all_sides(r)
     rooms._write(r)
-    seen: list[tuple[str, str]] = []
-    for _ in range(len(deck) + 1):
+    hong: list[str] = []
+    chung: list[str] = []
+    for _ in range(n * 2 + 4):
         live = rooms.load(code)
         if live is None or live.get("status") == "done":
             break
-        rel = live.get("relay") or {}
-        who = rel.get("pid") or ""
-        if not who:
+        acted = False
+        for side, bucket in (("홍팀", hong), ("청팀", chung)):
+            live = rooms.load(code)
+            if live is None or live.get("status") == "done":
+                break
+            lane = rooms.lane_of(live, side)
+            who = lane.get("pid") or ""
+            if not who or lane.get("done"):
+                continue
+            idx = int(lane.get("idx") or 0)
+            item = deck[idx]
+            ans = int(item["a"]) if "a" in item else 0
+            if "q" not in item:
+                from src.exam import item_at
+                ans = int(item_at(item["area_id"], item["i"])["a"])
+            bucket.append(live["players"][who]["name"])
+            rooms.answer(code, who, ans, ans, ms=400)
+            acted = True
+        if not acted:
             break
-        seen.append((rel.get("side") or "", live["players"][who]["name"]))
-        item = deck[int(rel.get("idx") or 0)]
-        ans = int(item["a"]) if "a" in item else 0
-        if "q" not in item:
-            from src.exam import item_at
-            ans = int(item_at(item["area_id"], item["i"])["a"])
-        rooms.answer(code, who, ans, ans, ms=400)
-    sides = [s for s, _ in seen]
-    hong = [n for s, n in seen if s == "홍팀"]
-    chung = [n for s, n in seen if s == "청팀"]
-    print(f"  ok  돌아가기: {seen}")
-    assert sides[:2] == ["홍팀", "청팀"]
-    assert hong[:2] == ["방장", "박경위"]
+    print(f"  ok  팀별 동시: 홍 {len(hong)}문항 / 청 {len(chung)}문항 · {hong[:4]}…")
+    assert len(hong) == n and len(chung) == n
+    assert hong[:4] == ["방장", "박경위", "방장", "박경위"]
     assert set(chung) == {"이경장"}
     final = rooms.load(code)
     assert final["status"] == "done"

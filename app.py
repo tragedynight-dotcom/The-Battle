@@ -1320,13 +1320,18 @@ def show_teams(room: dict) -> None:
         return
     speed = rooms.mode_of(room) == "speed"
     surv = rooms.mode_of(room) == "survival"
+    total = len(room.get("deck") or []) or 1
     order = {r["side"]: r for r in rows}
     cells = []
     for side in rooms.SIDES:
-        r = order.get(side) or {"side": side, "n": 0, "score": 0, "points": 0, "alive": 0}
+        r = order.get(side) or {"side": side, "n": 0, "score": 0, "points": 0, "alive": 0, "prog": 0}
         big = r["points"] if speed else r["score"]
         unit = "점" if speed else "개"
-        sub = f"{r['n']}명 · 생존 {r['alive']}명" if surv else f"{r['n']}명"
+        prog = int(r.get("prog") or 0)
+        if surv:
+            sub = f"{r['n']}명 · 생존 {r['alive']}명 · {prog}/{total}"
+        else:
+            sub = f"{r['n']}명 · 진행 {prog}/{total}"
         cells.append(
             f"<div class='team {SIDE_CLASS[side]}'><b>{side}</b>"
             f"<strong>{big}<span style='font-size:1rem'> {unit}</span></strong><span>{sub}</span></div>"
@@ -1359,11 +1364,12 @@ def show_ranking(room: dict, pid: str, title: str = "실시간 순위") -> None:
             state = f"탈락 · {r['idx']}번에서 멈춤"
         elif rooms.relay_on(room):
             asked = int(((room.get("relay") or {}).get("asked") or {}).get(r["pid"], 0))
-            now_pid = ((room.get("relay") or {}).get("pid") or "")
-            if r["pid"] == now_pid:
-                state = "지금 차례"
-            elif r["done"]:
+            lane = rooms.lane_of(room, r.get("side") or "")
+            now_pid = lane.get("pid") or ""
+            if lane.get("done") or r["done"]:
                 state = "완료"
+            elif r["pid"] == now_pid:
+                state = "지금 차례"
             else:
                 state = f"{asked}문제 담당 · 대기"
         elif r["done"]:
@@ -2049,7 +2055,13 @@ def host_setup_screen() -> None:
     )
     team_battle = lineup == "team"
     if team_battle:
-        st.caption(glue_kr("단체전입니다. 한 명씩 돌아가며 문제를 풉니다. 차례가 아니면 보고 있습니다."))
+        st.caption(
+            glue_kr(
+                "단체전입니다. 홍팀·청팀이 같은 문제를 동시에 각자 풉니다. "
+                "팀 안에서는 한 명씩 돌아가며, 상대 팀 문제는 보이지 않습니다. "
+                "맞힌 개수와 속도로 승부를 냅니다."
+            )
+        )
     else:
         st.caption(glue_kr("들어온 사람이 같은 문제를 각자 풉니다. 맞힌 개수와 점수로 개인 순위를 냅니다."))
     chance = st.checkbox("찬스 문제 넣기 (점수 2배)", value=True, key="host_chance")
@@ -2126,14 +2138,14 @@ def lobby_screen() -> None:
         pills.append(f"<span class='pill'>문항당 {lim}초</span>")
     if room.get("team_battle"):
         pills.append("<span class='pill gold'>단체전</span>")
-        pills.append("<span class='pill'>한 명씩 돌아가며</span>")
+        pills.append("<span class='pill'>팀별 동시</span>")
     else:
         pills.append("<span class='pill gold'>개인전</span>")
     if any(d.get("x2") for d in (room.get("deck") or [])):
         pills.append("<span class='pill gold'>찬스 문제 2배</span>")
     st.markdown("".join(pills), unsafe_allow_html=True)
     if room.get("team_battle"):
-        st.caption("이 번호를 불러 주십시오. 단체전입니다. 팀원이 한 명씩 돌아가며 풉니다.")
+        st.caption("이 번호를 불러 주십시오. 단체전입니다. 홍·청이 동시에 풀고, 팀원은 한 명씩 돌아가며 풉니다.")
     else:
         st.caption("이 번호를 불러 주십시오. 개인전입니다. 들어온 사람이 각자 같은 문제를 풉니다.")
 
@@ -2384,79 +2396,110 @@ def done_screen(room: dict, pid: str, deck: list[dict], total: int) -> None:
             _do_leave_to_enter()
 
 
-def _turn_banner(room: dict, pid: str) -> None:
+def _turn_banner(room: dict, pid: str, side: str) -> None:
     rel = room.get("relay") or {}
-    side = rel.get("side") or ""
-    batter = rel.get("pid") or ""
+    lane = rooms.lane_of(room, side)
+    batter = lane.get("pid") or ""
     name = ((room.get("players") or {}).get(batter) or {}).get("name") or ""
     cls = SIDE_CLASS.get(side, "wait")
     mine = batter == pid
-    nxt = []
-    for s in rooms.SIDES:
-        row = rooms.lineup(room, s)
-        cur = int((rel.get("cursor") or {}).get(s) or 0)
-        if not row:
-            continue
+    row = rooms.lineup(room, side)
+    cur = int(((rel.get("cursor") or {}).get(side) or 0))
+    nxt = ""
+    if row:
         nxt_pid = row[cur % len(row)]
         nxt_name = ((room.get("players") or {}).get(nxt_pid) or {}).get("name") or ""
-        if nxt_name:
-            nxt.append(f"{s} 다음 {nxt_name}")
-    hint = "당신 차례입니다. 답을 고르십시오." if mine else "보고 계십시오. 답을 고르지 않습니다."
-    extra = " · ".join(nxt)
+        if nxt_name and nxt_pid != batter:
+            nxt = f"다음 {nxt_name}"
+    hint = "당신 차례입니다. 답을 고르십시오." if mine else "같은 팀 차례입니다. 보고 계십시오."
     st.markdown(
         f"<div class='seat {cls}'><b>지금 차례 · {html.escape(side)}</b>"
         f"<strong>{html.escape(name)}</strong><span>{html.escape(hint)}"
-        f"{(' · ' + html.escape(extra)) if extra else ''}</span></div>",
+        f"{(' · ' + html.escape(nxt)) if nxt else ''}</span></div>",
         unsafe_allow_html=True,
     )
-    last = rel.get("last") or {}
-    if last:
+    last_map = rel.get("last") or {}
+    last = last_map.get(side) if isinstance(last_map, dict) else {}
+    if isinstance(last, dict) and last:
         mark = "맞힘" if last.get("ok") else "틀림"
-        st.caption(f"방금 {last.get('side') or ''} {last.get('name') or ''} · {mark} · {int(last.get('pts') or 0)}점")
+        st.caption(f"방금 우리 팀 {last.get('name') or ''} · {mark} · {int(last.get('pts') or 0)}점")
 
 
 def play_relay(room: dict, pid: str, deck: list[dict], total: int) -> None:
-    """한 문항씩 홍·청이 나가고, 각 편은 들어온 순서대로 돌아간다."""
+    """홍·청이 같은 덱을 동시에 각자 풀고, 팀 안에서는 한 명씩 돌아간다."""
     code = room["code"]
-    rel = room.get("relay") or {}
-    if room.get("status") == "done" or not rel.get("pid"):
+    me = (room.get("players") or {}).get(pid) or {}
+    side = me.get("side") or ""
+    if side not in rooms.SIDES:
+        st.warning("편이 정해지지 않았습니다. 로비에서 홍팀·청팀을 고르십시오.")
+        if st.button("로비로", key="relay_no_side"):
+            _goto("lobby")
+            st.rerun()
+        return
+
+    if room.get("status") == "done":
         done_screen(room, pid, deck, total)
         return
+
+    lane = rooms.lane_of(room, side)
+    if lane.get("done"):
+        show_teams(room)
+        st.success("우리 팀 문제를 모두 풀었습니다. 상대 팀이 끝날 때까지 기다리십시오.")
+        with st.expander("지금 순위 · 교육장 전광판", expanded=True):
+            @st.fragment(run_every=2)
+            def wait_other():
+                live = rooms.load(code)
+                if live is None:
+                    return
+                if live.get("status") == "done":
+                    st.rerun()
+                    return
+                show_ranking(live, pid, "실시간 순위")
+
+            wait_other()
+        st.markdown('<div class="mini-mark"></div>', unsafe_allow_html=True)
+        b1, _ = st.columns([1, 4])
+        with b1:
+            if st.button("나가기", key="leave_relay_wait"):
+                _ask_leave_quiz()
+        return
+
     lim = rooms.limit_sec(room)
     rnd = int(room.get("round") or 1)
-    idx = int(rel.get("idx") or 0)
+    idx = int(lane.get("idx") or 0)
     item = current_item(deck, idx)
     if item is None:
         done_screen(room, pid, deck, total)
         return
     double = bool(deck[idx].get("x2"))
-    batter = rel.get("pid") or ""
-    me = (room.get("players") or {}).get(pid) or {}
+    batter = lane.get("pid") or ""
     order = rooms.ranking(room)
     pos = next((i for i, r in enumerate(order, 1) if r["pid"] == pid), len(order))
     left = None
     if lim:
-        left = max(0.0, rooms.deadline(room) - time.time())
+        left = max(0.0, rooms.deadline(room, me if pid == batter else ((room.get("players") or {}).get(batter) or {})) - time.time())
     show_teams(room)
     _hud(room, me, idx, total, pos, len(order), left, lim)
-    _turn_banner(room, pid)
+    _turn_banner(room, pid, side)
 
-    if lim:
+    if lim and batter:
         @st.fragment(run_every=1)
         def time_watch():
             live = rooms.load(code)
             if live is None or live.get("status") != "play":
                 return
-            cur = ((live.get("relay") or {}).get("pid") or "")
-            cur_idx = int(((live.get("relay") or {}).get("idx") or 0))
-            if cur != batter or cur_idx != idx:
+            cur_lane = rooms.lane_of(live, side)
+            cur = cur_lane.get("pid") or ""
+            cur_idx = int(cur_lane.get("idx") or 0)
+            if cur != batter or cur_idx != idx or cur_lane.get("done"):
                 st.rerun()
                 return
-            secs = rooms.deadline(live) - time.time()
+            batter_p = ((live.get("players") or {}).get(batter) or {})
+            secs = rooms.deadline(live, batter_p) - time.time()
             if secs > 0:
                 st.caption(f"남은 시간 {int(secs) + 1}초")
                 return
-            rooms.expire_turn(code, int(item["a"]), double=double)
+            rooms.expire_turn(code, int(item["a"]), double=double, side=side)
             _react_answer(code, batter)
             st.rerun()
 
@@ -2468,18 +2511,18 @@ def play_relay(room: dict, pid: str, deck: list[dict], total: int) -> None:
         pick = None
         if item.get("kind") == "num":
             st.caption("원문 그대로입니다. 숫자를 넣고 확인을 누르십시오.")
-            nkey = f"num_{code}_{rnd}_{idx}"
+            nkey = f"num_{code}_{rnd}_{side}_{idx}"
             n1, n2, _ = st.columns([1.2, 1, 2.8])
             with n1:
                 st.number_input("숫자", min_value=0, max_value=99, step=1, key=nkey, label_visibility="collapsed")
             with n2:
-                if st.button("확인", type="primary", key=f"numok_{code}_{rnd}_{idx}"):
+                if st.button("확인", type="primary", key=f"numok_{code}_{rnd}_{side}_{idx}"):
                     pick = int(st.session_state.get(nkey) or 0)
         else:
-            pick = pick_choice(item, f"r_{code}_{rnd}_{idx}")
+            pick = pick_choice(item, f"r_{code}_{rnd}_{side}_{idx}")
         if pick is not None:
             spent = 0
-            at = rel.get("q_at")
+            at = lane.get("q_at")
             if at:
                 try:
                     spent = int(max(0.0, time.time() - datetime.fromisoformat(at).timestamp()) * 1000)
@@ -2489,6 +2532,7 @@ def play_relay(room: dict, pid: str, deck: list[dict], total: int) -> None:
             _react_answer(code, pid)
             st.rerun()
     else:
+        st.caption("상대 팀 문제는 보이지 않습니다. 우리 팀 차례를 기다리십시오.")
         if item.get("choices"):
             shown = " · ".join(
                 (c if item.get("ox") else f"{circle(i)} {c}")
@@ -2503,9 +2547,10 @@ def play_relay(room: dict, pid: str, deck: list[dict], total: int) -> None:
             live = rooms.load(code)
             if live is None:
                 return
-            nxt = ((live.get("relay") or {}).get("pid") or "")
-            nidx = int(((live.get("relay") or {}).get("idx") or 0))
-            if live.get("status") != "play" or nxt != batter or nidx != idx:
+            cur_lane = rooms.lane_of(live, side)
+            nxt = cur_lane.get("pid") or ""
+            nidx = int(cur_lane.get("idx") or 0)
+            if live.get("status") != "play" or nxt != batter or nidx != idx or cur_lane.get("done"):
                 st.rerun()
 
         wait_turn()

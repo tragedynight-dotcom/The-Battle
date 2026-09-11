@@ -207,8 +207,10 @@ def deadline(room: dict | None, p: dict | None = None) -> float:
     """이 문항이 끝나는 시각(epoch 초). 제한이 없으면 0."""
     lim = limit_sec(room)
     at = ""
-    if relay_on(room):
-        at = ((room or {}).get("relay") or {}).get("q_at") or ""
+    if relay_on(room) and p:
+        side = p.get("side") or ""
+        if side in SIDES:
+            at = (_lane(room, side).get("q_at") or "")
     elif p:
         at = p.get("q_at") or ""
     if not lim or not at:
@@ -378,18 +380,33 @@ def relay_on(room: dict | None) -> bool:
     return bool(room and room.get("team_battle"))
 
 
+def _empty_lane() -> dict:
+    return {"idx": 0, "pid": "", "q_at": None, "done": False, "done_at": None}
+
+
 def _empty_relay() -> dict:
     return {
-        "idx": 0,
-        "pid": "",
-        "side": "",
-        "q_at": None,
         "asked": {},
-        "last": None,
-        "next_side": SIDES[0],
+        "last": {},
         "cursor": {SIDES[0]: 0, SIDES[1]: 0},
         "order": {SIDES[0]: [], SIDES[1]: []},
+        "lanes": {SIDES[0]: _empty_lane(), SIDES[1]: _empty_lane()},
     }
+
+
+def _lane(room: dict, side: str) -> dict:
+    """팀별 진행 칸. 홍·청이 같은 문제를 동시에 각자 푼다."""
+    rel = room.setdefault("relay", _empty_relay())
+    lanes = rel.setdefault("lanes", {})
+    if side not in lanes or not isinstance(lanes.get(side), dict):
+        lanes[side] = _empty_lane()
+    return lanes[side]
+
+
+def lane_of(room: dict | None, side: str) -> dict:
+    if not room or side not in SIDES:
+        return _empty_lane()
+    return dict(_lane(room, side))
 
 
 def _other_side(side: str) -> str:
@@ -427,44 +444,77 @@ def _next_in_line(room: dict, side: str) -> str:
     return ""
 
 
+def _active_sides(room: dict) -> list[str]:
+    got = []
+    for s in SIDES:
+        if any(p.get("side") == s for p in (room.get("players") or {}).values()):
+            got.append(s)
+    return got
+
+
 def _close_relay(room: dict) -> None:
     room["status"] = "done"
     now = datetime.now().isoformat()
     for p in room["players"].values():
         p["done"] = True
         p["done_at"] = p.get("done_at") or now
-    rel = room.setdefault("relay", _empty_relay())
-    rel["pid"] = ""
-    rel["idx"] = len(room.get("deck") or [])
+    for s in SIDES:
+        lane = _lane(room, s)
+        lane["pid"] = ""
+        lane["done"] = True
+        lane["done_at"] = lane.get("done_at") or now
+        lane["idx"] = len(room.get("deck") or [])
     _log_done(room)
 
 
-def _deal_turn(room: dict) -> None:
-    """홍·청을 한 문항씩 번갈아, 각 편은 들어온 순서대로 돌아간다."""
-    deck = room.get("deck") or []
-    rel = room.setdefault("relay", _empty_relay())
-    idx = int(rel.get("idx") or 0)
-    if idx >= len(deck):
+def _finish_side(room: dict, side: str) -> None:
+    lane = _lane(room, side)
+    now = datetime.now().isoformat()
+    lane["done"] = True
+    lane["pid"] = ""
+    lane["q_at"] = None
+    lane["done_at"] = lane.get("done_at") or now
+    lane["idx"] = len(room.get("deck") or [])
+    for p in (room.get("players") or {}).values():
+        if p.get("side") == side:
+            p["done"] = True
+            p["done_at"] = p.get("done_at") or now
+            p["idx"] = len(room.get("deck") or [])
+    if all(_lane(room, s).get("done") for s in _active_sides(room) or SIDES):
         _close_relay(room)
+
+
+def _deal_side(room: dict, side: str) -> None:
+    """한 팀이 덱을 끝까지 푼다. 팀 안에서는 들어온 순서대로 한 명씩."""
+    if side not in SIDES:
         return
-    want = rel.get("next_side") if rel.get("next_side") in SIDES else SIDES[0]
-    pid = _next_in_line(room, want)
+    deck = room.get("deck") or []
+    lane = _lane(room, side)
+    if lane.get("done"):
+        return
+    idx = int(lane.get("idx") or 0)
+    if idx >= len(deck):
+        _finish_side(room, side)
+        return
+    pid = _next_in_line(room, side)
     if not pid:
-        want = _other_side(want)
-        pid = _next_in_line(room, want)
-    if not pid:
-        _close_relay(room)
+        _finish_side(room, side)
         return
     now = datetime.now().isoformat()
-    rel["idx"] = idx
-    rel["pid"] = pid
-    rel["side"] = want
-    rel["q_at"] = now
-    rel["next_side"] = _other_side(want)
+    lane["pid"] = pid
+    lane["q_at"] = now
     p = room["players"][pid]
     p["idx"] = idx
     p["q_idx"] = idx
     p["q_at"] = now
+
+
+def _deal_all_sides(room: dict) -> None:
+    sides = _active_sides(room) or list(SIDES)
+    for s in sides:
+        lane = _lane(room, s)
+        if not lane.get("done") and not lane.get("pid"):
+            _deal_side(room, s)
 
 
 def begin_if_due(code: str) -> dict | None:
@@ -476,8 +526,7 @@ def begin_if_due(code: str) -> dict | None:
             room["status"] = "play"
             if relay_on(room):
                 room["relay"] = room.get("relay") or _empty_relay()
-                if not (room["relay"] or {}).get("pid"):
-                    _deal_turn(room)
+                _deal_all_sides(room)
             _write(room)
         return room
 
@@ -582,8 +631,9 @@ def answer(code: str, pid: str, choice: int, answer: int, ms: int = 0, double: b
             return room
         if room.get("status") == "countdown" and seconds_left(room) <= 0:
             room["status"] = "play"
-            if relay_on(room) and not (room.get("relay") or {}).get("pid"):
-                _deal_turn(room)
+            if relay_on(room):
+                room["relay"] = room.get("relay") or _empty_relay()
+                _deal_all_sides(room)
         if room.get("status") != "play":
             return room
         p = room["players"][pid]
@@ -591,26 +641,35 @@ def answer(code: str, pid: str, choice: int, answer: int, ms: int = 0, double: b
             return room
         deck = room.get("deck") or []
         if relay_on(room):
-            rel = room.setdefault("relay", _empty_relay())
-            if rel.get("pid") != pid:
+            side = p.get("side") or ""
+            if side not in SIDES:
                 return room
-            idx = int(rel.get("idx") or 0)
+            rel = room.setdefault("relay", _empty_relay())
+            lane = _lane(room, side)
+            if lane.get("done") or lane.get("pid") != pid:
+                return room
+            idx = int(lane.get("idx") or 0)
             if idx < 0 or idx >= len(deck):
                 return room
             ok, pts = _mark_answer(room, pid, idx, choice, answer, ms, double)
             asked = rel.setdefault("asked", {})
             asked[pid] = int(asked.get(pid, 0)) + 1
-            rel["last"] = {
+            last = rel.setdefault("last", {})
+            if not isinstance(last, dict):
+                last = {}
+                rel["last"] = last
+            last[side] = {
                 "idx": idx,
                 "pid": pid,
                 "name": p.get("name") or "",
-                "side": p.get("side") or "",
+                "side": side,
                 "ok": ok,
                 "pts": pts,
             }
-            rel["idx"] = idx + 1
-            rel["pid"] = ""
-            _deal_turn(room)
+            lane["idx"] = idx + 1
+            lane["pid"] = ""
+            lane["q_at"] = None
+            _deal_side(room, side)
             _write(room)
             return room
         idx = int(p.get("idx") or 0)
@@ -626,29 +685,43 @@ def answer(code: str, pid: str, choice: int, answer: int, ms: int = 0, double: b
     return _with_lock(code, inner)
 
 
-def expire_turn(code: str, answer: int, double: bool = False) -> dict | None:
-    """돌아가기 차례에서 제한시간이 지났으면 지금 푸는 사람을 틀린 것으로 처리한다."""
+def expire_turn(code: str, answer: int, double: bool = False, side: str = "") -> dict | None:
+    """팀 차례에서 제한시간이 지났으면 지금 푸는 사람을 틀린 것으로 처리한다."""
 
     def inner():
         room = _read(code)
         if room is None or not relay_on(room) or room.get("status") != "play":
             return room
-        rel = room.get("relay") or {}
-        pid = rel.get("pid") or ""
-        if not pid or pid not in room["players"]:
-            return room
-        lim = limit_sec(room)
-        dl = deadline(room)
-        if lim and dl and time.time() < dl:
-            return room
-        return None
+        want = side if side in SIDES else ""
+        targets = [want] if want else list(SIDES)
+        for s in targets:
+            lane = _lane(room, s)
+            pid = lane.get("pid") or ""
+            if not pid or pid not in room["players"]:
+                continue
+            p = room["players"][pid]
+            lim = limit_sec(room)
+            dl = deadline(room, p)
+            if lim and dl and time.time() < dl:
+                continue
+            return None
+        return room
 
     caught = _with_lock(code, inner)
     if caught is None:
-        room = _read(code)
-        rel = (room or {}).get("relay") or {}
-        pid = rel.get("pid") or ""
-        return answer(code, pid, -1, answer, ms=limit_sec(room) * 1000, double=double)
+        room = _read(code) or {}
+        want = side if side in SIDES else ""
+        for s in ([want] if want else list(SIDES)):
+            lane = _lane(room, s) if room else {}
+            pid = (lane or {}).get("pid") or ""
+            if not pid:
+                continue
+            p = ((room.get("players") or {}).get(pid) or {})
+            lim = limit_sec(room)
+            dl = deadline(room, p)
+            if lim and dl and time.time() >= dl:
+                return answer(code, pid, -1, answer, ms=lim * 1000, double=double)
+        return room
     return caught
 
 
@@ -741,15 +814,24 @@ def team_ranking(room: dict) -> list[dict]:
         side = p.get("side") or ""
         if side not in SIDES:
             continue
-        a = agg.setdefault(side, {"side": side, "n": 0, "score": 0, "points": 0, "alive": 0, "ms": 0})
+        a = agg.setdefault(
+            side,
+            {"side": side, "n": 0, "score": 0, "points": 0, "alive": 0, "ms": 0, "at": "9999", "prog": 0},
+        )
         a["n"] += 1
         a["score"] += int(p.get("score") or 0)
         a["points"] += int(p.get("points") or 0)
         a["ms"] += int(p.get("ms") or 0)
         if not p.get("out"):
             a["alive"] += 1
+    for s, a in agg.items():
+        lane = _lane(room, s)
+        a["prog"] = int(lane.get("idx") or 0)
+        if lane.get("done"):
+            a["at"] = lane.get("done_at") or a["at"]
+            a["prog"] = len(room.get("deck") or [])
     key = "points" if mode_of(room) == "speed" else "score"
-    rows = sorted(agg.values(), key=lambda r: (-r[key], _time_key(r["ms"], ""), r["side"]))
+    rows = sorted(agg.values(), key=lambda r: (-r[key], _time_key(r["ms"], r["at"]), r["side"]))
     return rows
 
 
