@@ -1,0 +1,25 @@
+{
+  "id": "/The-Battle/",
+  "name": "실무역량 평가 다통과 : The Battle",
+  "short_name": "The Battle",
+  "lang": "ko",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#1c2430",
+  "theme_color": "#1c2430",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

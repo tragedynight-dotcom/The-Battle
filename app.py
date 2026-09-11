@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import base64
 import html
 import math
 import random
 import time
 import uuid
 from datetime import datetime
+from pathlib import Path
 from urllib.parse import urlencode
 
 import streamlit as st
@@ -21,6 +23,11 @@ APP_TITLE = "실무역량 평가 다통과 : The Battle"
 EXAM_TITLE = "실무역량평가(객관식)"
 EXAM_DESC = "객관식 문제로 개인전·단체전 등 여러 모드에서 겨룹니다."
 OX_DESC = "OX문제로 개인전·단체전 등 여러 모드에서 겨룹니다."
+
+_ROOT = Path(__file__).resolve().parent
+_APP_ICON = _ROOT / "assets" / "icon-192.png"
+if not _APP_ICON.is_file():
+    _APP_ICON = _ROOT / "assets" / "the-battle-icon.png"
 
 # 객관식 보기는 다통과처럼 st.radio 사용 (버튼 안 긴 한글 줄바꿈 깨짐 방지)
 _WJ = "\u2060"
@@ -48,7 +55,34 @@ def glue_kr(text: str) -> str:
     return "".join(out)
 
 
-st.set_page_config(page_title=APP_TITLE, page_icon="🛡️", layout="wide")
+st.set_page_config(
+    page_title=APP_TITLE,
+    page_icon=str(_APP_ICON) if _APP_ICON.is_file() else "🛡️",
+    layout="wide",
+)
+
+
+def _inject_home_screen_icons() -> None:
+    """홈 화면 추가·북마크용 아이콘 (원작 기하 마크, 관공서 엠블럼 아님)."""
+    icon = _ROOT / "assets" / "icon-180.png"
+    if not icon.is_file():
+        icon = _APP_ICON
+    if not icon.is_file():
+        return
+    b64 = base64.b64encode(icon.read_bytes()).decode("ascii")
+    href = f"data:image/png;base64,{b64}"
+    st.markdown(
+        f"""
+        <link rel="apple-touch-icon" sizes="180x180" href="{href}">
+        <link rel="icon" type="image/png" sizes="192x192" href="{href}">
+        <meta name="apple-mobile-web-app-title" content="The Battle">
+        <meta name="application-name" content="The Battle">
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+_inject_home_screen_icons()
 st.markdown(
     """
     <style>

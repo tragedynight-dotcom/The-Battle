@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>The Battle</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <meta name="application-name" content="The Battle">
+  <meta name="apple-mobile-web-app-title" content="The Battle">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#1c2430">
+  <style>
+    body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: #1c2430; overscroll-behavior-y: contain; }
+    iframe { width: 100%; height: 100%; border: none; background: #eef1f5; }
+    #inapp-guide {
+      display: none; position: fixed; bottom: 0; left: 0; width: 100%;
+      background-color: #e2553d; color: #ffffff; text-align: center;
+      padding: 16px 20px; box-sizing: border-box;
+      font-family: "Pretendard", "Malgun Gothic", sans-serif;
+      font-size: 0.95rem; line-height: 1.5; z-index: 9999;
+      box-shadow: 0 -4px 12px rgba(0,0,0,0.2);
+    }
+    #inapp-guide b { color: #fde047; font-weight: 800; }
+  </style>
+</head>
+<body>
+  <iframe id="app-iframe" allow="clipboard-write; camera; geolocation; fullscreen; autoplay"></iframe>
+  <div id="inapp-guide">현재 네이버/카카오 앱에서는 단독 앱 설치가 제한됩니다.<br>메뉴에서 <b>다른 브라우저로 열기</b> 후 홈 화면에 추가해 주세요.</div>
+
+  <script>
+    var STREAMLIT_URL = "https://thebattle.streamlit.app/?embed=true";
+
+    function loadApp() {
+      var iframe = document.getElementById("app-iframe");
+      if (iframe) iframe.src = STREAMLIT_URL;
+    }
+
+    loadApp();
+
+    var ua = navigator.userAgent.toLowerCase();
+    if (ua.indexOf("naver") > -1 || ua.indexOf("kakaotalk") > -1 || ua.indexOf("line") > -1) {
+      var guide = document.getElementById("inapp-guide");
+      if (guide) guide.style.display = "block";
+    }
+
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", function () {
+        navigator.serviceWorker.register("sw.js").catch(function () {});
+      });
+    }
+  </script>
+</body>
+</html>
