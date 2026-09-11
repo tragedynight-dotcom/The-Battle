@@ -265,7 +265,7 @@ def flash_fx(ok: bool, streak: int, token: str) -> None:
     st.session_state._fx_token = token
     n = max(0, int(streak or 0))
     if ok:
-        title = f"{n}연속!" if n >= 2 else "정답!"
+        title = f"{n}연속!" if n >= 2 else "정답"
         if n >= 8:
             note = "대폭발 콤보"
             tier = "big"
@@ -279,13 +279,17 @@ def flash_fx(ok: bool, streak: int, token: str) -> None:
             note = "콤보 시작"
             tier = "hot"
         else:
-            note = "맞혔습니다"
+            note = ""
             tier = "ok"
     else:
         title = "아쉽"
         note = "다음 문항에서 다시"
         tier = "miss"
-    burst_n = 0 if not ok else (10 if n < 2 else (14 if n < 5 else (18 if n < 8 else 26)))
+    # 첫 정답은 문제 가림 막기: 폭죽·풀스크린 플래시 없음
+    burst_n = 0 if (not ok or n < 2) else (14 if n < 5 else (18 if n < 8 else 26))
+    spark_on = "true" if (ok and n >= 2) else "false"
+    ring_on = "true" if (ok and n >= 2) else "false"
+    life_ms = 850 if tier == "ok" else (1100 if tier == "miss" else 1500)
     components.html(
         f"""
 <div id="tb-fx-seed" style="display:none"></div>
@@ -296,6 +300,9 @@ def flash_fx(ok: bool, streak: int, token: str) -> None:
   var title = {title!r};
   var note = {note!r};
   var burstN = {burst_n};
+  var sparkOn = {spark_on};
+  var ringOn = {ring_on};
+  var lifeMs = {life_ms};
   function host() {{
     try {{ if (window.top && window.top.document && window.top.document.body) return window.top; }} catch (e) {{}}
     try {{ if (window.parent && window.parent.document && window.parent.document.body) return window.parent; }} catch (e) {{}}
@@ -308,27 +315,39 @@ def flash_fx(ok: bool, streak: int, token: str) -> None:
     if (old && old.parentNode) old.parentNode.removeChild(old);
   }} catch (e) {{}}
   var style = doc.getElementById("tb-fx-style");
-  if (!style) {{
-    style = doc.createElement("style");
-    style.id = "tb-fx-style";
-    style.textContent = `
+  if (style && style.parentNode) style.parentNode.removeChild(style);
+  style = doc.createElement("style");
+  style.id = "tb-fx-style";
+  style.textContent = `
 #tb-fx-layer {{position:fixed; inset:0; z-index:2147483000; pointer-events:none; overflow:hidden;
   font-family:Pretendard,Malgun Gothic,sans-serif;}}
 #tb-fx-layer .tb-flash {{position:absolute; inset:0; opacity:0;
-  background:radial-gradient(ellipse at 50% 30%, rgba(34,197,94,.45), rgba(34,197,94,.08) 42%, transparent 68%);
-  animation:tbFlash 1.15s ease-out forwards;}}
-#tb-fx-layer.hot .tb-flash {{background:radial-gradient(ellipse at 50% 28%, rgba(255,196,72,.55), rgba(226,85,61,.18) 40%, transparent 68%);}}
-#tb-fx-layer.big .tb-flash {{background:radial-gradient(ellipse at 50% 26%, rgba(255,230,140,.62), rgba(226,85,61,.22) 38%, transparent 70%);}}
-#tb-fx-layer.miss .tb-flash {{background:radial-gradient(ellipse at 50% 32%, rgba(192,57,43,.28), transparent 62%);}}
-#tb-fx-layer .tb-pop {{position:absolute; left:50%; top:28%; transform:translate(-50%,-50%); text-align:center;
-  animation:tbPop 1.35s ease-out forwards;}}
-#tb-fx-layer .tb-pop b {{display:block; font-size:clamp(2.2rem, 8vw, 3.4rem); font-weight:800; color:#fff;
-  letter-spacing:-.03em; text-shadow:0 8px 28px rgba(0,0,0,.45), 0 0 24px rgba(34,197,94,.55);}}
-#tb-fx-layer.hot .tb-pop b, #tb-fx-layer.big .tb-pop b {{color:#ffe7a3; text-shadow:0 8px 28px rgba(0,0,0,.5), 0 0 28px rgba(255,196,72,.7);
-  animation:tbShake .5s ease-out;}}
-#tb-fx-layer.miss .tb-pop b {{color:#f3d0cc; font-size:clamp(1.6rem, 6vw, 2.2rem); text-shadow:0 6px 18px rgba(0,0,0,.4);}}
+  background:radial-gradient(ellipse at 50% 12%, rgba(34,197,94,.22), transparent 48%);
+  animation:tbFlash .75s ease-out forwards;}}
+#tb-fx-layer.ok .tb-flash {{background:radial-gradient(ellipse at 50% 8%, rgba(34,197,94,.18), transparent 38%);
+  animation-duration:.55s;}}
+#tb-fx-layer.hot .tb-flash {{background:radial-gradient(ellipse at 50% 28%, rgba(255,196,72,.55), rgba(226,85,61,.18) 40%, transparent 68%);
+  animation-duration:1.15s;}}
+#tb-fx-layer.big .tb-flash {{background:radial-gradient(ellipse at 50% 26%, rgba(255,230,140,.62), rgba(226,85,61,.22) 38%, transparent 70%);
+  animation-duration:1.15s;}}
+#tb-fx-layer.miss .tb-flash {{background:radial-gradient(ellipse at 50% 18%, rgba(192,57,43,.22), transparent 55%);}}
+#tb-fx-layer .tb-pop {{position:absolute; left:50%; top:14%; transform:translate(-50%,-50%); text-align:center;
+  animation:tbPop .85s ease-out forwards;}}
+#tb-fx-layer.ok .tb-pop {{top:11%; animation-duration:.7s;}}
+#tb-fx-layer.hot .tb-pop, #tb-fx-layer.big .tb-pop {{top:28%; animation-duration:1.35s;}}
+#tb-fx-layer.miss .tb-pop {{top:16%;}}
+#tb-fx-layer .tb-pop b {{display:block; font-size:clamp(1.15rem, 4.2vw, 1.55rem); font-weight:800; color:#ecfdf5;
+  letter-spacing:-.02em; text-shadow:0 2px 10px rgba(0,0,0,.35);}}
+#tb-fx-layer.ok .tb-pop b {{font-size:clamp(1.05rem, 3.8vw, 1.35rem); color:#d1fae5;
+  background:rgba(16,185,129,.88); padding:.28rem .85rem; border-radius:999px;
+  box-shadow:0 4px 14px rgba(16,120,80,.28); text-shadow:none;}}
+#tb-fx-layer.hot .tb-pop b, #tb-fx-layer.big .tb-pop b {{
+  font-size:clamp(2.2rem, 8vw, 3.4rem); color:#ffe7a3; background:transparent; padding:0; border-radius:0;
+  text-shadow:0 8px 28px rgba(0,0,0,.5), 0 0 28px rgba(255,196,72,.7); animation:tbShake .5s ease-out;}}
+#tb-fx-layer.miss .tb-pop b {{color:#f3d0cc; font-size:clamp(1.35rem, 5vw, 1.8rem); text-shadow:0 6px 18px rgba(0,0,0,.4);}}
 #tb-fx-layer .tb-pop span {{display:block; margin-top:6px; color:#f7ecd0; font-weight:700;
   font-size:clamp(1rem, 3.6vw, 1.2rem); text-shadow:0 2px 10px rgba(0,0,0,.35);}}
+#tb-fx-layer.ok .tb-pop span {{display:none;}}
 #tb-fx-layer .tb-ring {{position:absolute; left:50%; top:28%; width:28px; height:28px; border-radius:50%;
   border:3px solid rgba(255,220,100,.95); transform:translate(-50%,-50%);
   animation:tbRing 1.05s ease-out forwards;}}
@@ -341,8 +360,8 @@ def flash_fx(ok: bool, streak: int, token: str) -> None:
 #tb-fx-layer .tb-burst i:nth-child(odd) {{background:#fff; width:7px; height:7px;}}
 #tb-fx-layer .tb-burst i:nth-child(3n) {{background:#e2553d;}}
 @keyframes tbFlash {{0%{{opacity:1;}} 100%{{opacity:0;}}}}
-@keyframes tbPop {{0%{{opacity:0; transform:translate(-50%,-40%) scale(.55);}}
-  18%{{opacity:1; transform:translate(-50%,-50%) scale(1.12);}}
+@keyframes tbPop {{0%{{opacity:0; transform:translate(-50%,-40%) scale(.85);}}
+  18%{{opacity:1; transform:translate(-50%,-50%) scale(1.04);}}
   70%{{opacity:1;}} 100%{{opacity:0; transform:translate(-50%,-64%) scale(1);}}}}
 @keyframes tbRing {{0%{{opacity:1; width:24px; height:24px;}} 100%{{opacity:0; width:320px; height:320px;}}}}
 @keyframes tbSpark {{0%{{opacity:1; transform:translate(0,0) scale(1);}}
@@ -352,31 +371,32 @@ def flash_fx(ok: bool, streak: int, token: str) -> None:
 @keyframes tbShake {{0%{{transform:translateX(0);}} 25%{{transform:translateX(-5px) rotate(-1.5deg);}}
   50%{{transform:translateX(5px) rotate(1.5deg);}} 100%{{transform:translateX(0);}}}}
 `;
-    try {{ (doc.head || doc.documentElement).appendChild(style); }} catch (e) {{}}
-  }}
+  try {{ (doc.head || doc.documentElement).appendChild(style); }} catch (e) {{}}
   var layer = doc.createElement("div");
   layer.id = "tb-fx-layer";
   layer.className = tier;
   var html = '<div class="tb-flash"></div>';
-  if (ok) {{
+  if (ok && ringOn) {{
     html += '<i class="tb-ring"></i>';
     if (tier === "hot" || tier === "big") html += '<i class="tb-ring r2"></i>';
     if (tier === "big") html += '<i class="tb-ring r3"></i>';
+  }}
+  if (ok && sparkOn) {{
     [[-80,-40],[85,-50],[0,-85],[-60,55],[70,60],[-95,10],[95,15]].forEach(function (p) {{
       html += '<i class="tb-spark" style="--dx:' + p[0] + 'px;--dy:' + p[1] + 'px"></i>';
     }});
-    if (burstN > 0) {{
-      html += '<span class="tb-burst">';
-      for (var i = 0; i < burstN; i++) {{
-        var ang = (360 / burstN) * i;
-        var dist = 78 + (i % 5) * 20;
-        var rad = ang * Math.PI / 180;
-        var dx = Math.round(dist * Math.cos(rad));
-        var dy = Math.round(dist * Math.sin(rad));
-        html += '<i style="--dx:' + dx + 'px;--dy:' + dy + 'px;--rot:' + ang + 'deg"></i>';
-      }}
-      html += '</span>';
+  }}
+  if (burstN > 0) {{
+    html += '<span class="tb-burst">';
+    for (var i = 0; i < burstN; i++) {{
+      var ang = (360 / burstN) * i;
+      var dist = 78 + (i % 5) * 20;
+      var rad = ang * Math.PI / 180;
+      var dx = Math.round(dist * Math.cos(rad));
+      var dy = Math.round(dist * Math.sin(rad));
+      html += '<i style="--dx:' + dx + 'px;--dy:' + dy + 'px;--rot:' + ang + 'deg"></i>';
     }}
+    html += '</span>';
   }}
   html += '<div class="tb-pop"><b></b><span></span></div>';
   layer.innerHTML = html;
@@ -385,7 +405,7 @@ def flash_fx(ok: bool, streak: int, token: str) -> None:
   try {{ doc.body.appendChild(layer); }} catch (e) {{ return; }}
   setTimeout(function () {{
     try {{ if (layer.parentNode) layer.parentNode.removeChild(layer); }} catch (e) {{}}
-  }}, 1500);
+  }}, lifeMs);
 }})();
 </script>
 """,
