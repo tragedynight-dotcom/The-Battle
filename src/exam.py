@@ -206,10 +206,12 @@ def _ox_context(q: str) -> str:
 
 
 def _ox_skip(item: dict) -> bool:
-    """사례·ㄱㄴ 고르기는 O/X로 내면 보기가 'ㄱ, ㄴ'만 남아 어색하다."""
+    """사례·ㄱㄴ 고르기·개수 문제는 O/X로 내지 않는다."""
     q = item.get("q") or ""
     choices = item.get("choices") or []
     blob = q + "\n" + "\n".join(str(c) for c in choices)
+    if NUM_Q.search(q):
+        return True
     if OX_CASE.search(blob) or OX_PICK.search(q):
         return True
     if any(OX_COMBO.match(str(c or "").strip()) for c in choices):
@@ -234,14 +236,6 @@ def as_ox_item(item: dict, rng: random.Random) -> dict:
         "src": item.get("src") or "",
         "i": item.get("i") if item.get("i") is not None else item.get("n"),
     }
-    if NUM_Q.search(q) and 0 <= ans_i < len(choices):
-        num = _first_int(choices[ans_i])
-        if num is not None:
-            row["q"] = q
-            row["kind"] = "num"
-            row["a"] = num
-            row["choices"] = []
-            return row
     if not choices:
         return item
     use_key = rng.random() < 0.5
@@ -285,7 +279,7 @@ def make_ox_quiz(choice_id: str, count: int, seed: int) -> tuple[list[dict], str
     deck: list[dict] = []
     for ref in refs:
         item = item_at(ref["area_id"], ref["i"])
-        if _ox_skip(item) and not NUM_Q.search(item.get("q") or ""):
+        if _ox_skip(item):
             continue
         deck.append(as_ox_item(item, ox_rng))
         if len(deck) >= want:

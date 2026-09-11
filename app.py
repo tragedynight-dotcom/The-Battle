@@ -1304,7 +1304,7 @@ def _render_header(phase: str) -> None:
     elif phase in ("lobby", "play"):
         _mast_slim("실무역량평가 OX" if st.session_state.get("quiz_kind") == "ox" else EXAM_TITLE)
     elif st.session_state.get("quiz_kind") == "ox":
-        _mast("공식 보기 한 줄이 맞는지 O/X로 풉니다. 몇 개를 묻는 문제는 숫자를 넣습니다.", "실무역량평가 OX")
+        _mast("공식 보기 한 줄이 맞는지 O/X로 풉니다.", "실무역량평가 OX")
     else:
         _mast("방장이 주제와 방식을 정하고, 들어온 사람을 확인한 뒤 시작합니다.", APP_TITLE)
 
@@ -2215,7 +2215,7 @@ def host_setup_screen() -> None:
         st.caption(glue_kr("들어온 사람이 같은 문제를 각자 풉니다. 맞힌 개수와 점수로 개인 순위를 냅니다."))
     chance = st.checkbox("찬스 문제 넣기 (점수 2배)", value=True, key="host_chance")
     if kind == "ox":
-        st.caption(glue_kr("설명이 맞으면 O, 틀리면 X입니다. 몇 개인지 묻는 문제는 숫자를 넣습니다."))
+        st.caption(glue_kr("설명이 맞으면 O, 틀리면 X입니다."))
 
     open_room = st.button("이 설정으로 방 열기", type="primary", use_container_width=True)
     if st.button("← 뒤로가기", key="setup_back", use_container_width=True):
