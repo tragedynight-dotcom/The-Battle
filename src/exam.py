@@ -66,8 +66,12 @@ def tidy(text: str) -> str:
 
 
 @lru_cache(maxsize=1)
-def load_areas() -> list[dict]:
+def _load_areas(mtime_ns: int) -> list[dict]:
     return json.loads(BANK_PATH.read_text(encoding="utf-8"))
+
+
+def load_areas() -> list[dict]:
+    return _load_areas(BANK_PATH.stat().st_mtime_ns)
 
 
 def all_items(areas: list[dict] | None = None) -> list[dict]:
