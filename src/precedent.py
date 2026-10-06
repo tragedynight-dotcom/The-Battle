@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 from urllib.parse import quote, urlencode
 
@@ -173,19 +174,31 @@ def _first_field(obj: Any, key: str) -> Any:
 
 POLICE_ORG = "1320000"
 
+# 경찰청 소관이 아니어도 현장에서 직접 집행·적용하는 법령. 법령명은 법제처 정식 명칭과 같아야 한다.
+RELATED_LAWS = [
+    "형사소송법",
+    "형법",
+    "검사와 사법경찰관의 상호협력과 일반적 수사준칙에 관한 규정",
+    "즉결심판에 관한 절차법",
+    "폭력행위 등 처벌에 관한 법률",
+    "특정범죄 가중처벌 등에 관한 법률",
+    "교통사고처리 특례법",
+    "가정폭력범죄의 처벌 등에 관한 특례법",
+    "스토킹범죄의 처벌 등에 관한 법률",
+    "아동학대범죄의 처벌 등에 관한 특례법",
+    "아동복지법",
+    "성폭력범죄의 처벌 등에 관한 특례법",
+    "아동ㆍ청소년의 성보호에 관한 법률",
+    "성매매알선 등 행위의 처벌에 관한 법률",
+    "출입국관리법",
+    "정신건강증진 및 정신질환자 복지서비스 지원에 관한 법률",
+    "마약류 관리에 관한 법률",
+    "전기통신금융사기 피해 방지 및 피해자산 환급에 관한 특별법",
+    "청소년 보호법",
+]
 
-def search_police_laws(oc: str, display: int = 30) -> tuple[list[dict], int]:
-    if not oc.strip():
-        return [], 0
-    params = {
-        "OC": oc.strip(),
-        "target": "law",
-        "type": "JSON",
-        "org": POLICE_ORG,
-        "sort": "ddes",
-        "display": max(1, min(int(display), 100)),
-        "page": 1,
-    }
+
+def _law_rows(params: dict) -> tuple[list[dict], int]:
     r = requests.get(SEARCH_URL, params=params, timeout=20)
     r.raise_for_status()
     r.encoding = "utf-8"
@@ -200,9 +213,40 @@ def search_police_laws(oc: str, display: int = 30) -> tuple[list[dict], int]:
         total = int(block.get("totalCnt") or 0)
     except (TypeError, ValueError):
         total = 0
+    return _as_list(block.get("law")), total
+
+
+def _related_rows(oc: str, name: str) -> list[dict]:
+    rows, _ = _law_rows(
+        {"OC": oc, "target": "law", "type": "JSON", "query": name, "search": 1, "display": 20, "page": 1}
+    )
+    wanted = {name, f"{name} 시행령", f"{name} 시행규칙"}
+    return [r for r in rows if str(r.get("법령명한글") or r.get("법령명") or "").strip() in wanted]
+
+
+def search_police_laws(oc: str, display: int = 30) -> tuple[list[dict], int]:
+    """경찰청 소관 법령 + RELATED_LAWS를 합쳐 공포일 최근순으로 돌려준다."""
+    if not oc.strip():
+        return [], 0
+    oc = oc.strip()
+    police, _ = _law_rows(
+        {
+            "OC": oc,
+            "target": "law",
+            "type": "JSON",
+            "org": POLICE_ORG,
+            "sort": "ddes",
+            "display": max(1, min(int(display), 100)),
+            "page": 1,
+        }
+    )
+    related: list[dict] = []
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        for rows in pool.map(lambda n: _safe_related(oc, n), RELATED_LAWS):
+            related.extend(rows)
     out: list[dict] = []
     seen: set[str] = set()
-    for row in _as_list(block.get("law")):
+    for row in police + related:
         mst = str(row.get("법령일련번호") or "").strip()
         name = str(row.get("법령명한글") or row.get("법령명") or "").strip()
         key = mst or name
@@ -222,7 +266,15 @@ def search_police_laws(oc: str, display: int = 30) -> tuple[list[dict], int]:
                 "시행일자": _fmt_ymd(str(row.get("시행일자") or "")),
             }
         )
-    return out, total
+    out.sort(key=lambda r: r["공포일자"], reverse=True)
+    return out, len(out)
+
+
+def _safe_related(oc: str, name: str) -> list[dict]:
+    try:
+        return _related_rows(oc, name)
+    except Exception:
+        return []
 
 
 def fetch_amend_reason(oc: str, mst: str) -> dict[str, str]:

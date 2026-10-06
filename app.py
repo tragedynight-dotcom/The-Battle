@@ -1324,9 +1324,9 @@ def _render_header(phase: str) -> None:
             tags=["방 번호 4자리로 합류", "개인전", "단체전", "서바이벌", "전국 지역관서별 대결 가능"],
         )
     elif phase == "cases":
-        _mast("법원이 경찰 전용으로 나눠 주지 않습니다. 현장 법령·쟁점으로 법제처 공식 판례만 가져옵니다.", "최신판례")
+        _mast("현장 법령·쟁점으로 법제처 공식 판례만 가져옵니다.", "최신판례")
     elif phase == "laws":
-        _mast("소관부처가 경찰청인 법령만 가져옵니다. 형소법처럼 다른 부처 소관은 여기 없습니다.", "법률개정")
+        _mast("경찰청 소관 법령과 형사소송법·형법·각종 특례법 등 현장에서 집행하는 법령의 제·개정을 가져옵니다.", "법률개정")
     elif phase in ("lobby", "play"):
         _mast_slim("실무역량평가 OX" if st.session_state.get("quiz_kind") == "ox" else EXAM_TITLE)
     elif st.session_state.get("quiz_kind") == "ox":
@@ -1380,7 +1380,7 @@ def gate_screen() -> None:
     with g3:
         _svc_card("최신판례", "음주운전·폭행·가정폭력 등 현장 쟁점으로 법제처 공식 판례만 제공", "03")
     with g4:
-        _svc_card("법률개정", "경찰청 소관 법령의 공포·시행·제개정만 제공", "04")
+        _svc_card("법률개정", "경찰청 소관·형사소송법 등 현장 법령의 공포·시행·제개정 제공", "04")
     _sect("내부 출입", "비밀번호를 넣으십시오.")
     with st.form("gate_form", clear_on_submit=False):
         pw = st.text_input("비밀번호", placeholder="비밀번호")
@@ -1870,7 +1870,7 @@ def hub_screen() -> None:
         with st.container(border=True):
             _svc_card(
                 "법률개정",
-                "경찰청 소관 법령의 공포·시행·제개정만 제공",
+                "경찰청 소관·형사소송법 등 현장 법령의 공포·시행·제개정 제공",
                 "06",
             )
             if st.button("법률개정 열기", type="primary", key="hub_law", use_container_width=True):
@@ -2031,7 +2031,10 @@ def laws_screen() -> None:
             _open_view("hub")
             st.rerun()
             return
-    st.caption("출처: 법제처. 소관부처 코드 경찰청(1320000)만 조회합니다. 개정 이유는 공식 제개정이유만 보여 줍니다.")
+    st.caption(
+        "출처: 법제처. 경찰청 소관 법령에 형사소송법·형법·수사준칙·가정폭력·스토킹·아동학대·성폭력 특례법 등 "
+        "현장 관련 법령을 더해 조회합니다. 개정 이유는 공식 제개정이유만 보여 줍니다."
+    )
     hide_org = st.checkbox("직제는 빼기", value=True, key="law_hide_org")
     oc = _law_oc()
     if not oc:
@@ -2045,9 +2048,9 @@ def laws_screen() -> None:
     if hide_org:
         rows = [r for r in rows if "직제" not in (r.get("법령명") or "")]
     if not rows:
-        st.warning("경찰청 소관으로 가져온 법령이 없습니다.")
+        st.warning("가져온 법령이 없습니다.")
         return
-    st.write(f"**경찰청 소관** · 공식 {total}건 가운데 {len(rows)}건 · 공포일 최근순")
+    st.write(f"**경찰청 소관 + 현장 관련 법령** · {len(rows)}건 · 공포일 최근순")
     for row in rows:
         name = html.escape(glue_kr(row.get("법령명") or ""))
         bits = [row.get("제개정") or "", row.get("법령구분") or "", row.get("소관부처") or ""]
@@ -2391,7 +2394,7 @@ def _law_brief() -> None:
     rows = [r for r in rows if "직제" not in (r.get("법령명") or "")][:3]
     if not rows:
         return
-    _sect("기다리는 동안 · 최근 개정", "경찰청 소관 법령 공포 최근순")
+    _sect("기다리는 동안 · 최근 개정", "경찰청 소관·현장 관련 법령 공포 최근순")
     for r in rows:
         meta = " · ".join(
             x for x in (
